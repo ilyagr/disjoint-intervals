@@ -65,59 +65,63 @@ impl<Ix: Ord + Copy, Label: Clone, InputIter: Iterator<Item = Interval<Ix, Label
     type Item = Interval<Ix, Vec<Label>>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let next_range_start = self
+        let mut next_range_start = self
             .sorted_input
             .peek()
-            .map(|(Range { start, .. }, _label)| *start)
-            .inspect(|next_start| {
-                self.position.inspect(|pos| {
-                    assert!(
-                        pos <= next_start,
-                        "Input intervals were not properly sorted"
-                    );
-                });
-            });
+            .map(|(Range { start, .. }, _label)| *start);
+
         if self.active_intervals.is_empty() {
             // Note the `?` that returns None if everything is empty
             self.position = Some(next_range_start?);
+        };
+
+        let mut next_range_start;
+        loop {
+
         }
-        assert!(
-            self.position.is_some(),
-            "active_intervals are empty on very first iteration"
-        );
+        
+        
+        
+         else {
+            assert!(
+                self.position.is_some(),
+                "active_intervals are empty on very first iteration"
+            );
+            if next_range_start.is_none_or(|next_start| next_start > self.position.unwrap()) {
+                // There are active intervals that will end before any new intervals from the input begin.
+                let next_end = self.active_intervals.next_end().cloned().unwrap();
+                let stop_at = match next_range_start {
+                    Some(next_start) => min(next_start, next_end),
+                    None => next_end,
+                };
+                let result = (
+                    self.position.unwrap()..stop_at,
+                    self.active_intervals.all_labels(),
+                );
+
+                self.position = Some(stop_at);
+                self.active_intervals
+                    .forget_intervals_ending_before(&stop_at);
+                return Some(result);
+            }
+        }
 
         while let Some((Range { start, .. }, _label)) = self.sorted_input.peek()
-            && *start == self.position.unwrap()
+            && *start <= self.position.unwrap()
         {
+            assert!(
+                *start == self.position.unwrap(),
+                "Input intervals were not properly sorted"
+            );
             let (range, label) = self.sorted_input.next().unwrap();
             self.active_intervals.add((range, label));
         }
-
-        let next_end = self.active_intervals.next_end().cloned().expect("Either active_intervals was non-empty from the beginning or the loop above must have made at least one iteration");
-        let next_range_start = self
-            .sorted_input
-            .peek()
-            .map(|(Range { start, .. }, _label)| *start)
-            .inspect(|next_start| {
-                self.position.inspect(|pos| {
-                    assert!(
-                        pos <= next_start,
-                        "Input intervals were not properly sorted"
-                    );
-                });
-            });
-        let stop_at = match next_range_start {
-            Some(next_start) => min(next_start, next_end),
-            None => next_end,
-        };
-        let result = (
-            self.position.unwrap()..stop_at,
-            self.active_intervals.all_labels(),
-        );
-        self.position = Some(stop_at);
-        self.active_intervals
-            .forget_intervals_ending_before(&stop_at);
-        Some(result)
+        // The above loop is guaranteed to iterate at least once, making
+        // `self.active_intervals` non-empty and ensuring that either
+        // `next_range_start > self.position` or `next_range_start == None`.
+        //
+        // So, this call will return `Some(..)` without further recursion.
+        self.next()
     }
 }
 
