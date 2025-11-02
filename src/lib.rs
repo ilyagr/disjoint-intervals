@@ -1,4 +1,4 @@
-use std::{cmp::min, collections::BTreeMap, iter::Peekable, ops::Range};
+use std::{cmp::min, collections::BTreeMap, fmt::Debug, iter::Peekable, ops::Range};
 
 // Alternative: "leap"? Get from starred repos.
 
@@ -15,9 +15,6 @@ pub struct DisjointRanges<
     /// Position of the "current" index
     position: Option<Ix>,
     // The set of intervals that `position` is inside of.
-    //
-    // The endpoint of each value should correspond to the key. The map is
-    // sorted by the smallest endpoint.
     currently_active_intervals: ActiveIntervalsOrderedByEndpoint<Ix, Label>,
 }
 
@@ -64,7 +61,12 @@ impl<Ix: Ord + Copy, Label: Clone, InputIter: Iterator<Item = Interval<Ix, Label
             return Some((current_position..next_end, labels));
         };
         let next_range_start = *next_range_start;
+
         let current_position = *self.position.get_or_insert(next_range_start);
+        assert!(
+            current_position <= next_range_start,
+            "Input intervals were not properly sorted"
+        );
         if current_position < next_range_start {
             if let Some(next_end) = self.currently_active_intervals.next_interval_end() {
                 let stop_at = min(next_range_start, *next_end);
@@ -81,7 +83,8 @@ impl<Ix: Ord + Copy, Label: Clone, InputIter: Iterator<Item = Interval<Ix, Label
             }
         }
 
-        // Now, current_position is the start of the next input range's start, so this loop will always make at least one iteration.
+        // This loop will always make at least one iteration.
+        debug_assert!(self.position.unwrap() == next_range_start);
         while let Some((Range { start, .. }, _label)) = self.sorted_input.peek()
             && *start == self.position.unwrap()
         {
@@ -94,9 +97,11 @@ impl<Ix: Ord + Copy, Label: Clone, InputIter: Iterator<Item = Interval<Ix, Label
     }
 }
 
-#[derive(Debug, Clone)]
-#[repr(transparent)]
+#[derive(Clone)]
 struct ActiveIntervalsOrderedByEndpoint<Ix: Ord + Copy, Label: Clone>(
+    // The key of the mapping is the endpoint of each interval in the value
+    // vector. The mapping is sorted by the smallest endpoint.
+    //
     // The start point is not actually necessary to compute DisjointRanges, we
     // could have values be `Vec<Label>`.
     //
@@ -136,6 +141,14 @@ impl<Ix: Ord + Copy, Label: Clone> ActiveIntervalsOrderedByEndpoint<Ix, Label> {
     }
 }
 
+impl<Ix: Ord + Copy + std::fmt::Debug, Label: Clone + Debug> Debug
+    for ActiveIntervalsOrderedByEndpoint<Ix, Label>
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::ops::RangeBounds;
@@ -156,6 +169,8 @@ mod tests {
             i(10..15),
             i(12..20),
             i(20..25),
+            i(22..30),
+            i(23..35),
         ];
         let result: Vec<_> = DisjointRanges::from_sorted_input(input.into_iter()).collect();
         dbg!(result);
