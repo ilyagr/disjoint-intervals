@@ -1,9 +1,4 @@
-use std::{
-    cmp::{Reverse, min},
-    collections::BTreeMap,
-    iter::Peekable,
-    ops::Range,
-};
+use std::{cmp::min, collections::BTreeMap, iter::Peekable, ops::Range};
 
 // Alternative: "leap"? Get from starred repos.
 
@@ -26,8 +21,8 @@ pub struct DisjointRanges<
     // The start point is not actually necessary to compute DisjointRanges, we
     // could have values be `Vec<Label>`.
     //
-    // TODO: Or binary heap?
-    currently_active_intervals: BTreeMap<Reverse<Ix>, Vec<Interval<Ix, Label>>>,
+    // TODO: Or reversed binary heap?
+    currently_active_intervals: BTreeMap<Ix, Vec<Interval<Ix, Label>>>,
 }
 
 impl<Ix: Ord + Copy, Label: Clone, InputIter: Iterator<Item = Interval<Ix, Label>>>
@@ -48,23 +43,20 @@ impl<Ix: Ord + Copy, Label: Clone, InputIter: Iterator<Item = Interval<Ix, Label
         // Could alternatively do `let end = max(start, end);`
         assert!(start <= end, "Interval start must be <= end");
         self.currently_active_intervals
-            .entry(Reverse(*end))
+            .entry(*end)
             .or_default()
             .push(interval);
     }
 
     fn next_active_interval_end(&self) -> Option<&Ix> {
-        self.currently_active_intervals
-            .keys()
-            .next()
-            .map(|Reverse(ix)| ix)
+        self.currently_active_intervals.keys().next()
     }
 
     fn forget_intervals_ending_before(&mut self, position: &Ix) {
-        while let Some((&Reverse(end), _)) = self.currently_active_intervals.first_key_value()
+        while let Some(end) = self.currently_active_intervals.keys().next().cloned()
             && end <= *position
         {
-            self.currently_active_intervals.remove(&Reverse(end));
+            self.currently_active_intervals.remove(&end);
         }
     }
 
@@ -139,7 +131,15 @@ mod tests {
 
     #[test]
     fn it_works() {
-        let input = vec![i(0..5), i(3..7), i(10..15), i(12..20), i(20..25)];
+        let input = vec![
+            i(0..5),
+            i(2..2),
+            i(3..7),
+            i(8..8),
+            i(10..15),
+            i(12..20),
+            i(20..25),
+        ];
         let result: Vec<_> = DisjointRanges::from_sorted_input(input.into_iter()).collect();
         dbg!(result);
         // TODO: empty range in input. Also maybe:
