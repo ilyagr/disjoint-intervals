@@ -4,6 +4,23 @@ use std::{cmp::min, collections::BTreeMap, fmt::Debug, iter::Peekable, ops::Rang
 
 pub type Interval<Ix, Label> = (Range<Ix>, Label);
 
+/// Intersects a set of intervals until it becomes disjoint.
+///
+/// Computes the disjoint intersections of an arbitrary set of labeled half-open
+/// intervals. The result is a set of disjoint intervals, each one an
+/// intersection of some of the original intervals. Each resulting disjoint
+/// interval is labeled with the vector of the labels of all the input intervals
+/// that contain the resulting interval.
+///
+/// Empty intervals (with start == end) are allowed and are considered as though
+/// they were located at the starting point but had negligible length. They are
+/// considered as intersecting any interval with the same starting point, but
+/// they do not intersect an interval with a smaller starting point and the same
+/// ending point. This may be useful, for example, when `Ix=usize` to represent
+/// positions in a text that are in between characters (such as a cursor).
+///
+/// Inverted intervals (with start > end) are not allowed and will cause a
+/// panic.
 #[derive(Debug, Clone)]
 pub struct DisjointRanges<
     Ix: Ord + Copy,
@@ -14,8 +31,10 @@ pub struct DisjointRanges<
     sorted_input: Peekable<InputIter>,
     /// Position of the "current" index
     position: Option<Ix>,
-    // The set of intervals that `position` is inside of.
-    currently_active_intervals: ActiveIntervalsOrderedByEndpoint<Ix, Label>,
+    // The set of intervals that `position` is inside of, sorted by the *ending
+    // point* of each interval. Elements are added and removed as needed during
+    // iteration.
+    active_intervals: ActiveIntervalsOrderedByEndpoint<Ix, Label>,
 }
 
 impl<Ix: Ord + Copy, Label: Clone, InputIter: Iterator<Item = Interval<Ix, Label>>>
@@ -27,7 +46,7 @@ impl<Ix: Ord + Copy, Label: Clone, InputIter: Iterator<Item = Interval<Ix, Label
         DisjointRanges {
             sorted_input: sorted_input.peekable(),
             position: None,
-            currently_active_intervals: ActiveIntervalsOrderedByEndpoint::new(),
+            active_intervals: ActiveIntervalsOrderedByEndpoint::new(),
         }
     }
 }
@@ -47,35 +66,29 @@ impl<Ix: Ord + Copy, Label: Clone, InputIter: Iterator<Item = Interval<Ix, Label
         )) = self.sorted_input.peek()
         else {
             // No more input intervals; still need to process any remaining active intervals.
-            let next_end = self
-                .currently_active_intervals
-                .next_interval_end()
-                .cloned()?;
+            let next_end = self.active_intervals.next_end().cloned()?;
             let current_position = self
                 .position
                 .expect("current_position must be set if there are active intervals");
             self.position = Some(next_end);
-            let labels = self.currently_active_intervals.all_labels();
-            self.currently_active_intervals
+            let labels = self.active_intervals.all_labels();
+            self.active_intervals
                 .forget_intervals_ending_before(&next_end);
             return Some((current_position..next_end, labels));
         };
         let next_range_start = *next_range_start;
 
-        let current_position = *self.position.get_or_insert(next_range_start);
+        let position = *self.position.get_or_insert(next_range_start);
         assert!(
-            current_position <= next_range_start,
+            position <= next_range_start,
             "Input intervals were not properly sorted"
         );
-        if current_position < next_range_start {
-            if let Some(next_end) = self.currently_active_intervals.next_interval_end() {
+        if position < next_range_start {
+            if let Some(next_end) = self.active_intervals.next_end() {
                 let stop_at = min(next_range_start, *next_end);
-                let result = (
-                    current_position..stop_at,
-                    self.currently_active_intervals.all_labels(),
-                );
+                let result = (position..stop_at, self.active_intervals.all_labels());
                 self.position = Some(stop_at);
-                self.currently_active_intervals
+                self.active_intervals
                     .forget_intervals_ending_before(&stop_at);
                 return Some(result);
             } else {
@@ -89,10 +102,12 @@ impl<Ix: Ord + Copy, Label: Clone, InputIter: Iterator<Item = Interval<Ix, Label
             && *start == self.position.unwrap()
         {
             let (range, label) = self.sorted_input.next().unwrap();
-            self.currently_active_intervals.add((range, label));
+            self.active_intervals.add((range, label));
         }
 
-        // Now, `current_position < (next input range start)` again.
+        // Now, `self.active_intervals` is not empty and either the input iterator
+        // is empty or `self.position < (next input range start)` again. So, `self.next()`
+        // will return a `Some` value without further recursion.
         self.next()
     }
 }
@@ -121,7 +136,8 @@ impl<Ix: Ord + Copy, Label: Clone> ActiveIntervalsOrderedByEndpoint<Ix, Label> {
         self.0.entry(*end).or_default().push(interval);
     }
 
-    fn next_interval_end(&self) -> Option<&Ix> {
+    /// The smallest endpoint of all intervals in the set
+    fn next_end(&self) -> Option<&Ix> {
         self.0.keys().next()
     }
 
