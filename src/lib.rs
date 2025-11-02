@@ -1,10 +1,12 @@
 use std::{cmp::min, collections::BTreeMap, fmt::Debug, iter::Peekable, ops::Range};
 
-// Alternative: "leap"? Get from starred repos.
+// Alternative: <https://github.com/sstadick/rust-lapper>. It stores the entire
+// tree of intervals, we don't.
 
+/// A labeled half-open interval: `start..end` and a label
 pub type Interval<Ix, Label> = (Range<Ix>, Label);
 
-/// Can be used with itertools::kmerge_by to merge multiple sorted interval iterators.
+/// Can be used with [`itertools::kmerge_by`] to merge multiple sorted interval iterators.
 pub fn start_point_before<Ix: Ord, Label>(
     a: &Interval<Ix, Label>,
     b: &Interval<Ix, Label>,
@@ -12,7 +14,7 @@ pub fn start_point_before<Ix: Ord, Label>(
     a.0.start < b.0.start
 }
 
-/// Intersects a set of intervals until it becomes disjoint.
+/// Iterator that intersects a set of intervals until it becomes disjoint.
 ///
 /// Computes the disjoint intersections of an arbitrary set of labeled half-open
 /// intervals. The result is a set of disjoint intervals, each one an
@@ -20,14 +22,14 @@ pub fn start_point_before<Ix: Ord, Label>(
 /// interval is labeled with the vector of the labels of all the input intervals
 /// that contain the resulting interval.
 ///
-/// Empty intervals (with start == end) are allowed and are considered as though
+/// Empty intervals (with `start == end`) are allowed and are considered as though
 /// they were located at the starting point but had negligible length. They are
 /// considered as intersecting any interval with the same starting point, but
 /// they do not intersect an interval with a smaller starting point and the same
 /// ending point. This may be useful, for example, when `Ix=usize` to represent
 /// positions in a text that are in between characters (such as a cursor).
 ///
-/// Inverted intervals (with start > end) are not allowed and will cause a
+/// Inverted intervals (with `start > end`) are not allowed and will cause a
 /// panic.
 #[derive(Debug, Clone)]
 pub struct DisjointRanges<
@@ -48,8 +50,13 @@ pub struct DisjointRanges<
 impl<Ix: Ord + Clone, Label: Clone, InputIter: Iterator<Item = Interval<Ix, Label>>>
     DisjointRanges<Ix, Label, InputIter>
 {
-    /// `sorted_input` must be sorted by the *start* of each interval.
-    /// Iterating will panix if any interval has start > end (not sure why Rust allows that). Empty intervals are OK.
+    /// Initialize from input sorted by the *start* of each interval.
+    ///
+    /// Empty intervals are OK. Iterating will panic if any interval has `start >
+    /// end` (not sure why Rust allows that).
+    ///
+    /// [`start_point_before`] can be used with `itertools::kmerge_by` or
+    /// `sort_by` to get appropriately ordered intervals.
     pub fn from_sorted_input(sorted_input: InputIter) -> DisjointRanges<Ix, Label, InputIter> {
         DisjointRanges {
             sorted_input: sorted_input.peekable(),
@@ -115,20 +122,26 @@ impl<Ix: Ord + Clone, Label: Clone, InputIter: Iterator<Item = Interval<Ix, Labe
 
         self.position = Some(stop_at.clone());
         self.active_intervals
-            .forget_intervals_ending_before(&stop_at);
+            .forget_intervals_ending_at_or_before(&stop_at);
         Some(result)
     }
 }
 
 #[derive(Clone)]
 struct ActiveIntervalsOrderedByEndpoint<Ix: Ord + Clone, Label: Clone>(
-    // The key of the mapping is the endpoint of each interval in the value
-    // vector. The mapping is sorted by the smallest endpoint.
+    /// The key of the mapping is the endpoint of each interval in the value
+    /// vector. The mapping is sorted by the smallest endpoint.
     //
     // The start point is not actually necessary to compute DisjointRanges, we
     // could have values be `Vec<Label>`.
     //
-    // TODO: Or reversed binary heap?
+    // TODOs: Possible optimizations to consider.
+    // - Use a binary heap for keys and a `HashMap` or `IndexMap` for storing
+    // values with fast lookup and interation.
+    // - Use a SmallVec for labels, since there will usually only be a few kinds
+    // of labels that overlap and the number is usually known at compile time.
+    // We'd then want to parametrize by the number of elements to initialize
+    // SmallVec with.
     BTreeMap<Ix, Vec<Interval<Ix, Label>>>,
 );
 
@@ -143,7 +156,8 @@ impl<Ix: Ord + Clone, Label: Clone> ActiveIntervalsOrderedByEndpoint<Ix, Label> 
 
     fn add(&mut self, interval: Interval<Ix, Label>) {
         let (Range { start, end }, _label) = &interval;
-        // Could alternatively do `let end = max(start, end);`
+        // Could alternatively do `let end = max(start, end);` and adjust the
+        // docs accordintly.
         assert!(start <= end, "Interval start must be <= end");
         self.0.entry(end.clone()).or_default().push(interval);
     }
@@ -153,8 +167,8 @@ impl<Ix: Ord + Clone, Label: Clone> ActiveIntervalsOrderedByEndpoint<Ix, Label> 
         self.0.keys().next()
     }
 
-    fn forget_intervals_ending_before(&mut self, position: &Ix) {
-        while let Some(end) = self.0.keys().next().cloned()
+    fn forget_intervals_ending_at_or_before(&mut self, position: &Ix) {
+        while let Some(end) = self.next_end().cloned()
             && end <= *position
         {
             self.0.remove(&end);
