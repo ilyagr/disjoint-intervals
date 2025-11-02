@@ -34,7 +34,7 @@ impl<Ix: Ord + Copy, Label: Clone, InputIter: Iterator<Item = Interval<Ix, Label
     DisjointRanges<Ix, Label, InputIter>
 {
     /// `sorted_input` must be sorted by the *start* of each interval.
-    /// `start_position` must be less than or equal to the start of the first interval in `sorted_input`.
+    /// Iterating will panix if any interval has start > end (not sure why Rust allows that). Empty intervals are OK.
     pub fn from_sorted_input(sorted_input: InputIter) -> DisjointRanges<Ix, Label, InputIter> {
         DisjointRanges {
             sorted_input: sorted_input.peekable(),
@@ -44,8 +44,9 @@ impl<Ix: Ord + Copy, Label: Clone, InputIter: Iterator<Item = Interval<Ix, Label
     }
 
     fn add_active_intervals(&mut self, interval: Interval<Ix, Label>) {
-        // let end = interval.0.end;
-        let (Range { start: _start, end }, _label) = &interval;
+        let (Range { start, end }, _label) = &interval;
+        // Could alternatively do `let end = max(start, end);`
+        assert!(start <= end, "Interval start must be <= end");
         self.currently_active_intervals
             .entry(Reverse(*end))
             .or_default()
@@ -113,25 +114,23 @@ impl<Ix: Ord + Copy, Label: Clone, InputIter: Iterator<Item = Interval<Ix, Label
             }
         }
 
-        // Now, current_position is the start of the next range, so this loop will always make at least one iteration.
+        // Now, current_position is the start of the next input range's start, so this loop will always make at least one iteration.
         while let Some((Range { start, .. }, _label)) = self.sorted_input.peek()
             && *start == self.current_position.unwrap()
         {
             let (range, label) = self.sorted_input.next().unwrap();
             self.add_active_intervals((range, label));
         }
-        let next_end = *self
-            .next_active_interval_end()
-            .expect("the loop above must have inserted at least one active interval");
-        let result = (current_position..next_end, self.all_active_labels());
-        self.current_position = Some(next_end);
-        self.forget_intervals_ending_before(&next_end);
-        Some(result)
+
+        // Now, `current_position < (next input range start)` again.
+        self.next()
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::ops::RangeBounds;
+
     use super::*;
 
     fn i(range: Range<usize>) -> Interval<usize, Range<usize>> {
@@ -144,6 +143,7 @@ mod tests {
         let result: Vec<_> = DisjointRanges::from_sorted_input(input.into_iter()).collect();
         dbg!(result);
         // TODO: empty range in input. Also maybe:
-        dbg!(Range { start: 5, end: 3 });
+        let weird = Range { start: 5, end: 3 };
+        dbg!(weird.clone(), weird.end, weird.end_bound());
     }
 }
