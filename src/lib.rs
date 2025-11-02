@@ -4,6 +4,14 @@ use std::{cmp::min, collections::BTreeMap, fmt::Debug, iter::Peekable, ops::Rang
 
 pub type Interval<Ix, Label> = (Range<Ix>, Label);
 
+/// Can be used with itertools::kmerge_by to merge multiple sorted interval iterators.
+pub fn start_point_before<Ix: Ord, Label>(
+    a: &Interval<Ix, Label>,
+    b: &Interval<Ix, Label>,
+) -> bool {
+    a.0.start < b.0.start
+}
+
 /// Intersects a set of intervals until it becomes disjoint.
 ///
 /// Computes the disjoint intersections of an arbitrary set of labeled half-open
@@ -171,6 +179,8 @@ mod tests {
 
     use insta::assert_debug_snapshot;
 
+    use itertools::Itertools as _;
+
     use super::*;
 
     fn i(range: Range<usize>) -> Interval<usize, Range<usize>> {
@@ -178,7 +188,7 @@ mod tests {
     }
 
     #[test]
-    fn it_works() {
+    fn test_algorithm() {
         let input = vec![
             i(0..5),
             i(2..2),
@@ -289,5 +299,144 @@ mod tests {
         // TODO: empty range in input. Also maybe:
         let weird = Range { start: 5, end: 3 };
         dbg!(weird.clone(), weird.end, weird.end_bound());
+    }
+
+    #[derive(Debug, Clone)]
+    enum Color {
+        Blue,
+        Yellow,
+    }
+
+    #[derive(Debug, Clone)]
+    enum Diff {
+        Changed,
+        Same,
+    }
+
+    #[derive(Clone)]
+    enum Annotation {
+        Color(Color),
+        Diff(Diff),
+    }
+
+    impl Debug for Annotation {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            let s = match self {
+                Annotation::Color(color) => format!("Color({color:?})"),
+                Annotation::Diff(diff) => format!("Diff({diff:?})"),
+            };
+            f.write_str(&s)
+        }
+    }
+
+    #[test]
+    fn test_mutliple_annotations() {
+        use Color::*;
+        use Diff::*;
+        // Has to be sorted
+        let syntax_highlighting = vec![(0..3, Blue), (5..8, Yellow), (9..15, Blue)];
+        let diffs = vec![(0..2, Same), (2..10, Changed), (11..15, Same)];
+
+        assert!(syntax_highlighting.is_sorted_by(start_point_before));
+        assert!(diffs.is_sorted_by(start_point_before));
+        let input: Vec<Vec<_>> = vec![
+            syntax_highlighting
+                .into_iter()
+                .map(|(range, color)| (range, Annotation::Color(color)))
+                .collect(),
+            diffs
+                .into_iter()
+                .map(|(range, diff)| (range, Annotation::Diff(diff)))
+                .collect(),
+        ];
+
+        // If the inputs are sorted, kmerge_by will efficiently preserve the order.
+        let input: Vec<_> = input.into_iter().kmerge_by(start_point_before).collect();
+        assert_debug_snapshot!(input, @r"
+        [
+            (
+                0..3,
+                Color(Blue),
+            ),
+            (
+                0..2,
+                Diff(Same),
+            ),
+            (
+                2..10,
+                Diff(Changed),
+            ),
+            (
+                5..8,
+                Color(Yellow),
+            ),
+            (
+                9..15,
+                Color(Blue),
+            ),
+            (
+                11..15,
+                Diff(Same),
+            ),
+        ]
+        ");
+        let result: Vec<_> = DisjointRanges::from_sorted_input(input.into_iter()).collect();
+        assert_debug_snapshot!(result, @r"
+        [
+            (
+                0..2,
+                [
+                    Diff(Same),
+                    Color(Blue),
+                ],
+            ),
+            (
+                2..3,
+                [
+                    Color(Blue),
+                    Diff(Changed),
+                ],
+            ),
+            (
+                3..5,
+                [
+                    Diff(Changed),
+                ],
+            ),
+            (
+                5..8,
+                [
+                    Color(Yellow),
+                    Diff(Changed),
+                ],
+            ),
+            (
+                8..9,
+                [
+                    Diff(Changed),
+                ],
+            ),
+            (
+                9..10,
+                [
+                    Diff(Changed),
+                    Color(Blue),
+                ],
+            ),
+            (
+                10..11,
+                [
+                    Color(Blue),
+                ],
+            ),
+            (
+                11..15,
+                [
+                    Color(Blue),
+                    Diff(Same),
+                ],
+            ),
+        ]
+        ");
     }
 }
