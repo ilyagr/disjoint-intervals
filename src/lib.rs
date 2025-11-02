@@ -31,7 +31,7 @@ pub fn start_point_before<Ix: Ord, Label>(
 /// panic.
 #[derive(Debug, Clone)]
 pub struct DisjointRanges<
-    Ix: Ord + Copy,
+    Ix: Ord + Clone,
     Label: Clone,
     InputIter: Iterator<Item = Interval<Ix, Label>>,
 > {
@@ -45,7 +45,7 @@ pub struct DisjointRanges<
     active_intervals: ActiveIntervalsOrderedByEndpoint<Ix, Label>,
 }
 
-impl<Ix: Ord + Copy, Label: Clone, InputIter: Iterator<Item = Interval<Ix, Label>>>
+impl<Ix: Ord + Clone, Label: Clone, InputIter: Iterator<Item = Interval<Ix, Label>>>
     DisjointRanges<Ix, Label, InputIter>
 {
     /// `sorted_input` must be sorted by the *start* of each interval.
@@ -59,7 +59,7 @@ impl<Ix: Ord + Copy, Label: Clone, InputIter: Iterator<Item = Interval<Ix, Label
     }
 }
 
-impl<Ix: Ord + Copy, Label: Clone, InputIter: Iterator<Item = Interval<Ix, Label>>> Iterator
+impl<Ix: Ord + Clone, Label: Clone, InputIter: Iterator<Item = Interval<Ix, Label>>> Iterator
     for DisjointRanges<Ix, Label, InputIter>
 {
     type Item = Interval<Ix, Vec<Label>>;
@@ -121,7 +121,7 @@ impl<Ix: Ord + Copy, Label: Clone, InputIter: Iterator<Item = Interval<Ix, Label
 }
 
 #[derive(Clone)]
-struct ActiveIntervalsOrderedByEndpoint<Ix: Ord + Copy, Label: Clone>(
+struct ActiveIntervalsOrderedByEndpoint<Ix: Ord + Clone, Label: Clone>(
     // The key of the mapping is the endpoint of each interval in the value
     // vector. The mapping is sorted by the smallest endpoint.
     //
@@ -132,7 +132,7 @@ struct ActiveIntervalsOrderedByEndpoint<Ix: Ord + Copy, Label: Clone>(
     BTreeMap<Ix, Vec<Interval<Ix, Label>>>,
 );
 
-impl<Ix: Ord + Copy, Label: Clone> ActiveIntervalsOrderedByEndpoint<Ix, Label> {
+impl<Ix: Ord + Clone, Label: Clone> ActiveIntervalsOrderedByEndpoint<Ix, Label> {
     fn new() -> Self {
         ActiveIntervalsOrderedByEndpoint(BTreeMap::new())
     }
@@ -145,7 +145,7 @@ impl<Ix: Ord + Copy, Label: Clone> ActiveIntervalsOrderedByEndpoint<Ix, Label> {
         let (Range { start, end }, _label) = &interval;
         // Could alternatively do `let end = max(start, end);`
         assert!(start <= end, "Interval start must be <= end");
-        self.0.entry(*end).or_default().push(interval);
+        self.0.entry(end.clone()).or_default().push(interval);
     }
 
     /// The smallest endpoint of all intervals in the set
@@ -169,7 +169,7 @@ impl<Ix: Ord + Copy, Label: Clone> ActiveIntervalsOrderedByEndpoint<Ix, Label> {
     }
 }
 
-impl<Ix: Ord + Copy + std::fmt::Debug, Label: Clone + Debug> Debug
+impl<Ix: Ord + Clone + std::fmt::Debug, Label: Clone + Debug> Debug
     for ActiveIntervalsOrderedByEndpoint<Ix, Label>
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
