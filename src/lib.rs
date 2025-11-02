@@ -65,47 +65,34 @@ impl<Ix: Ord + Copy, Label: Clone, InputIter: Iterator<Item = Interval<Ix, Label
     type Item = Interval<Ix, Vec<Label>>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let Some((
-            Range {
-                start: next_range_start,
-                ..
-            },
-            _next_label,
-        )) = self.sorted_input.peek()
-        else {
-            // No more input intervals; still need to process any remaining active intervals.
-            let next_end = self.active_intervals.next_end().cloned()?;
-            let current_position = self
-                .position
-                .expect("current_position must be set if there are active intervals");
-            self.position = Some(next_end);
-            let labels = self.active_intervals.all_labels();
-            self.active_intervals
-                .forget_intervals_ending_before(&next_end);
-            return Some((current_position..next_end, labels));
-        };
-        let next_range_start = *next_range_start;
-
-        let position = *self.position.get_or_insert(next_range_start);
-        assert!(
-            position <= next_range_start,
-            "Input intervals were not properly sorted"
-        );
-        if position < next_range_start {
-            if let Some(next_end) = self.active_intervals.next_end() {
-                let stop_at = min(next_range_start, *next_end);
-                let result = (position..stop_at, self.active_intervals.all_labels());
-                self.position = Some(stop_at);
-                self.active_intervals
-                    .forget_intervals_ending_before(&stop_at);
-                return Some(result);
-            } else {
-                self.position = Some(next_range_start);
+        if self.position.is_none() {
+            // Very first iteration
+            match self.sorted_input.peek() {
+                Some((Range { start, .. }, _label)) => {
+                    self.position = Some(*start);
+                }
+                None => {
+                    assert!(self.active_intervals.is_empty());
+                    return None;
+                }
             }
         }
 
-        // This loop will always make at least one iteration.
-        debug_assert!(self.position.unwrap() == next_range_start);
+        let next_range_start = self
+            .sorted_input
+            .peek()
+            .map(|(Range { start, .. }, _label)| *start)
+            .inspect(|next_start| {
+                assert!(
+                    self.position.unwrap() <= *next_start,
+                    "Input intervals were not properly sorted"
+                );
+            });
+        if self.active_intervals.is_empty() {
+            // Return None if everything is empty
+            self.position = Some(next_range_start?);
+        }
+
         while let Some((Range { start, .. }, _label)) = self.sorted_input.peek()
             && *start == self.position.unwrap()
         {
@@ -113,10 +100,19 @@ impl<Ix: Ord + Copy, Label: Clone, InputIter: Iterator<Item = Interval<Ix, Label
             self.active_intervals.add((range, label));
         }
 
-        // Now, `self.active_intervals` is not empty and either the input iterator
-        // is empty or `self.position < (next input range start)` again. So, `self.next()`
-        // will return a `Some` value without further recursion.
-        self.next()
+        let next_end = self.active_intervals.next_end().cloned().expect("Either active_intervals was non-empty before or the loop above must have made at least one iteration");
+        let stop_at = match next_range_start {
+            Some(next_start) => min(next_start, next_end),
+            None => next_end,
+        };
+        let result = (
+            self.position.unwrap()..stop_at,
+            self.active_intervals.all_labels(),
+        );
+        self.position = Some(stop_at);
+        self.active_intervals
+            .forget_intervals_ending_before(&stop_at);
+        Some(result)
     }
 }
 
@@ -135,6 +131,10 @@ struct ActiveIntervalsOrderedByEndpoint<Ix: Ord + Copy, Label: Clone>(
 impl<Ix: Ord + Copy, Label: Clone> ActiveIntervalsOrderedByEndpoint<Ix, Label> {
     fn new() -> Self {
         ActiveIntervalsOrderedByEndpoint(BTreeMap::new())
+    }
+
+    fn is_empty(&self) -> bool {
+        self.0.is_empty()
     }
 
     fn add(&mut self, interval: Interval<Ix, Label>) {
@@ -189,6 +189,9 @@ mod tests {
 
     #[test]
     fn test_algorithm() {
+        let empty: Vec<Interval<usize, ()>> = vec![];
+        let result: Vec<_> = DisjointRanges::from_sorted_input(empty.into_iter()).collect();
+        assert_debug_snapshot!(result, @"[]");
         let input = vec![
             i(0..5),
             i(2..2),
@@ -204,6 +207,12 @@ mod tests {
         let result: Vec<_> = DisjointRanges::from_sorted_input(input.into_iter()).collect();
         assert_debug_snapshot!(result, @r"
         [
+            (
+                0..0,
+                [
+                    0..5,
+                ],
+            ),
             (
                 0..2,
                 [
@@ -221,6 +230,13 @@ mod tests {
                 2..3,
                 [
                     0..5,
+                ],
+            ),
+            (
+                3..3,
+                [
+                    0..5,
+                    3..8,
                 ],
             ),
             (
@@ -250,9 +266,22 @@ mod tests {
                 ],
             ),
             (
+                10..10,
+                [
+                    10..15,
+                ],
+            ),
+            (
                 10..12,
                 [
                     10..15,
+                ],
+            ),
+            (
+                12..12,
+                [
+                    10..15,
+                    12..20,
                 ],
             ),
             (
@@ -269,9 +298,22 @@ mod tests {
                 ],
             ),
             (
+                20..20,
+                [
+                    20..25,
+                ],
+            ),
+            (
                 20..22,
                 [
                     20..25,
+                ],
+            ),
+            (
+                22..22,
+                [
+                    20..25,
+                    22..30,
                 ],
             ),
             (
@@ -279,6 +321,14 @@ mod tests {
                 [
                     20..25,
                     22..30,
+                ],
+            ),
+            (
+                23..23,
+                [
+                    20..25,
+                    22..30,
+                    23..35,
                 ],
             ),
             (
@@ -392,10 +442,24 @@ mod tests {
         assert_debug_snapshot!(result, @r"
         [
             (
+                0..0,
+                [
+                    Diff(Same),
+                    Color(Blue),
+                ],
+            ),
+            (
                 0..2,
                 [
                     Diff(Same),
                     Color(Blue),
+                ],
+            ),
+            (
+                2..2,
+                [
+                    Color(Blue),
+                    Diff(Changed),
                 ],
             ),
             (
@@ -408,6 +472,13 @@ mod tests {
             (
                 3..5,
                 [
+                    Diff(Changed),
+                ],
+            ),
+            (
+                5..5,
+                [
+                    Color(Yellow),
                     Diff(Changed),
                 ],
             ),
@@ -425,6 +496,13 @@ mod tests {
                 ],
             ),
             (
+                9..9,
+                [
+                    Diff(Changed),
+                    Color(Blue),
+                ],
+            ),
+            (
                 9..10,
                 [
                     Diff(Changed),
@@ -435,6 +513,13 @@ mod tests {
                 10..11,
                 [
                     Color(Blue),
+                ],
+            ),
+            (
+                11..11,
+                [
+                    Color(Blue),
+                    Diff(Same),
                 ],
             ),
             (
