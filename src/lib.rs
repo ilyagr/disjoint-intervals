@@ -72,32 +72,33 @@ impl<Ix: Ord + Copy, Label: Clone, InputIter: Iterator<Item = Interval<Ix, Label
                 .peek()
                 .map(|(Range { start, .. }, _label)| *start);
             if self.position.is_none() {
+                assert!(
+                    self.active_intervals.is_empty(),
+                    "Very first next() invocation"
+                );
                 // Note the `?` that returns None if everything is empty
                 self.position = Some(next_range_start?);
             };
             match next_range_start {
-                None => {
-                    if self.active_intervals.is_empty() {
-                        return None;
-                    } else {
-                        break;
-                    }
-                }
-                Some(next_start) if next_start > self.position.unwrap() => {
-                    if self.active_intervals.is_empty() {
-                        // No active intervals, so we can skip ahead
-                        self.position = Some(next_start);
-                    } else {
-                        break;
-                    }
-                }
                 Some(next_start) if next_start < self.position.unwrap() => {
                     panic!("Input intervals were not properly sorted")
                 }
-                Some(_) => {
-                    // next_start == self.position
+                Some(next_start) if next_start == self.position.unwrap() => {
                     let (range, label) = self.sorted_input.next().unwrap();
                     self.active_intervals.add((range, label));
+                }
+                _ => {
+                    // The range between self.position and next_range_start does
+                    // not have any new intervals to add to the active set.
+                    // Think of `self.position` as negative infinity if it is
+                    // `None`, and of `next_range_start` as positive infinity if
+                    // it is `None`.
+                    if !self.active_intervals.is_empty() {
+                        break;
+                    };
+                    // No active intervals, and no new intervals to add, so we
+                    // can either skip ahead or quit
+                    self.position = Some(next_range_start?);
                 }
             }
         }
