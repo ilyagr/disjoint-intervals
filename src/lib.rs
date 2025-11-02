@@ -65,7 +65,7 @@ impl<Ix: Ord + Copy, Label: Clone, InputIter: Iterator<Item = Interval<Ix, Label
     type Item = Interval<Ix, Vec<Label>>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let next_range_start = self
+        let mut next_range_start = self
             .sorted_input
             .peek()
             .map(|(Range { start, .. }, _label)| *start)
@@ -86,26 +86,17 @@ impl<Ix: Ord + Copy, Label: Clone, InputIter: Iterator<Item = Interval<Ix, Label
             "active_intervals are empty on very first iteration"
         );
 
-        while let Some((Range { start, .. }, _label)) = self.sorted_input.peek()
-            && *start == self.position.unwrap()
-        {
+        while let Some((Range { start, .. }, _label)) = self.sorted_input.peek() {
+            if *start != self.position.unwrap() {
+                next_range_start = Some(*start);
+                // TODO: Should it become None sometimes?
+                break;
+            }
             let (range, label) = self.sorted_input.next().unwrap();
             self.active_intervals.add((range, label));
         }
 
         let next_end = self.active_intervals.next_end().cloned().expect("Either active_intervals was non-empty from the beginning or the loop above must have made at least one iteration");
-        let next_range_start = self
-            .sorted_input
-            .peek()
-            .map(|(Range { start, .. }, _label)| *start)
-            .inspect(|next_start| {
-                self.position.inspect(|pos| {
-                    assert!(
-                        pos <= next_start,
-                        "Input intervals were not properly sorted"
-                    );
-                });
-            });
         let stop_at = match next_range_start {
             Some(next_start) => min(next_start, next_end),
             None => next_end,
@@ -290,6 +281,14 @@ mod tests {
                 ],
             ),
             (
+                23..23,
+                [
+                    20..25,
+                    22..30,
+                    23..35,
+                ],
+            ),
+            (
                 23..25,
                 [
                     20..25,
@@ -443,6 +442,13 @@ mod tests {
                 10..11,
                 [
                     Color(Blue),
+                ],
+            ),
+            (
+                11..11,
+                [
+                    Color(Blue),
+                    Diff(Same),
                 ],
             ),
             (
