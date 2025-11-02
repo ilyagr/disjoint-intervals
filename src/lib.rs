@@ -169,6 +169,8 @@ impl<Ix: Ord + Copy + std::fmt::Debug, Label: Clone + Debug> Debug
 mod tests {
     use std::ops::RangeBounds;
 
+    use insta::assert_debug_snapshot;
+
     use super::*;
 
     fn i(range: Range<usize>) -> Interval<usize, Range<usize>> {
@@ -189,7 +191,101 @@ mod tests {
             i(23..35),
         ];
         let result: Vec<_> = DisjointRanges::from_sorted_input(input.into_iter()).collect();
-        dbg!(result);
+        assert_debug_snapshot!(result, @r"
+        [
+            (
+                0..2,
+                [
+                    0..5,
+                ],
+            ),
+            (
+                2..2,
+                [
+                    2..2,
+                    0..5,
+                ],
+            ),
+            (
+                2..3,
+                [
+                    0..5,
+                ],
+            ),
+            (
+                3..5,
+                [
+                    0..5,
+                    3..7,
+                ],
+            ),
+            (
+                5..7,
+                [
+                    3..7,
+                ],
+            ),
+            (
+                8..8,
+                [
+                    8..8,
+                ],
+            ),
+            (
+                10..12,
+                [
+                    10..15,
+                ],
+            ),
+            (
+                12..15,
+                [
+                    10..15,
+                    12..20,
+                ],
+            ),
+            (
+                15..20,
+                [
+                    12..20,
+                ],
+            ),
+            (
+                20..22,
+                [
+                    20..25,
+                ],
+            ),
+            (
+                22..23,
+                [
+                    20..25,
+                    22..30,
+                ],
+            ),
+            (
+                23..25,
+                [
+                    20..25,
+                    22..30,
+                    23..35,
+                ],
+            ),
+            (
+                25..30,
+                [
+                    22..30,
+                    23..35,
+                ],
+            ),
+            (
+                30..35,
+                [
+                    23..35,
+                ],
+            ),
+        ]
+        ");
         // TODO: empty range in input. Also maybe:
         let weird = Range { start: 5, end: 3 };
         dbg!(weird.clone(), weird.end, weird.end_bound());
