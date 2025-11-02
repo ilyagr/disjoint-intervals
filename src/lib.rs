@@ -70,20 +70,20 @@ impl<Ix: Ord + Clone, Label: Clone, InputIter: Iterator<Item = Interval<Ix, Labe
             next_range_start = self
                 .sorted_input
                 .peek()
-                .map(|(Range { start, .. }, _label)| *start);
+                .map(|(Range { start, .. }, _label)| start.clone());
             if self.position.is_none() {
                 assert!(
                     self.active_intervals.is_empty(),
                     "Very first next() invocation"
                 );
                 // Note the `?` that returns None if everything is empty
-                self.position = Some(next_range_start?);
+                self.position = Some(next_range_start.as_ref()?.clone());
             };
             match next_range_start {
-                Some(next_start) if next_start < self.position.unwrap() => {
+                Some(next_start) if next_start < self.position.as_ref().unwrap().clone() => {
                     panic!("Input intervals were not properly sorted")
                 }
-                Some(next_start) if next_start == self.position.unwrap() => {
+                Some(next_start) if next_start == self.position.as_ref().unwrap().clone() => {
                     let (range, label) = self.sorted_input.next().unwrap();
                     self.active_intervals.add((range, label));
                 }
@@ -98,7 +98,7 @@ impl<Ix: Ord + Clone, Label: Clone, InputIter: Iterator<Item = Interval<Ix, Labe
                     };
                     // No active intervals, and no new intervals to add, so we
                     // can either skip ahead or quit
-                    self.position = Some(next_range_start?);
+                    self.position = Some(next_range_start.as_ref()?.clone());
                 }
             }
         }
@@ -109,11 +109,11 @@ impl<Ix: Ord + Clone, Label: Clone, InputIter: Iterator<Item = Interval<Ix, Labe
             None => next_end,
         };
         let result = (
-            self.position.unwrap()..stop_at,
+            self.position.as_ref().unwrap().clone()..stop_at.clone(),
             self.active_intervals.all_labels(),
         );
 
-        self.position = Some(stop_at);
+        self.position = Some(stop_at.clone());
         self.active_intervals
             .forget_intervals_ending_before(&stop_at);
         Some(result)
