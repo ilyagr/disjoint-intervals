@@ -65,33 +65,26 @@ impl<Ix: Ord + Copy, Label: Clone, InputIter: Iterator<Item = Interval<Ix, Label
     type Item = Interval<Ix, Vec<Label>>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.position.is_none() {
-            // Very first iteration
-            match self.sorted_input.peek() {
-                Some((Range { start, .. }, _label)) => {
-                    self.position = Some(*start);
-                }
-                None => {
-                    assert!(self.active_intervals.is_empty());
-                    return None;
-                }
-            }
-        }
-
         let next_range_start = self
             .sorted_input
             .peek()
             .map(|(Range { start, .. }, _label)| *start)
             .inspect(|next_start| {
-                assert!(
-                    self.position.unwrap() <= *next_start,
-                    "Input intervals were not properly sorted"
-                );
+                self.position.inspect(|pos| {
+                    assert!(
+                        pos <= next_start,
+                        "Input intervals were not properly sorted"
+                    );
+                });
             });
         if self.active_intervals.is_empty() {
-            // Return None if everything is empty
+            // Note the `?` that returns None if everything is empty
             self.position = Some(next_range_start?);
         }
+        assert!(
+            self.position.is_some(),
+            "active_intervals are empty on very first iteration"
+        );
 
         while let Some((Range { start, .. }, _label)) = self.sorted_input.peek()
             && *start == self.position.unwrap()
@@ -100,7 +93,19 @@ impl<Ix: Ord + Copy, Label: Clone, InputIter: Iterator<Item = Interval<Ix, Label
             self.active_intervals.add((range, label));
         }
 
-        let next_end = self.active_intervals.next_end().cloned().expect("Either active_intervals was non-empty before or the loop above must have made at least one iteration");
+        let next_end = self.active_intervals.next_end().cloned().expect("Either active_intervals was non-empty from the beginning or the loop above must have made at least one iteration");
+        let next_range_start = self
+            .sorted_input
+            .peek()
+            .map(|(Range { start, .. }, _label)| *start)
+            .inspect(|next_start| {
+                self.position.inspect(|pos| {
+                    assert!(
+                        pos <= next_start,
+                        "Input intervals were not properly sorted"
+                    );
+                });
+            });
         let stop_at = match next_range_start {
             Some(next_start) => min(next_start, next_end),
             None => next_end,
@@ -208,12 +213,6 @@ mod tests {
         assert_debug_snapshot!(result, @r"
         [
             (
-                0..0,
-                [
-                    0..5,
-                ],
-            ),
-            (
                 0..2,
                 [
                     0..5,
@@ -230,13 +229,6 @@ mod tests {
                 2..3,
                 [
                     0..5,
-                ],
-            ),
-            (
-                3..3,
-                [
-                    0..5,
-                    3..8,
                 ],
             ),
             (
@@ -266,22 +258,9 @@ mod tests {
                 ],
             ),
             (
-                10..10,
-                [
-                    10..15,
-                ],
-            ),
-            (
                 10..12,
                 [
                     10..15,
-                ],
-            ),
-            (
-                12..12,
-                [
-                    10..15,
-                    12..20,
                 ],
             ),
             (
@@ -298,22 +277,9 @@ mod tests {
                 ],
             ),
             (
-                20..20,
-                [
-                    20..25,
-                ],
-            ),
-            (
                 20..22,
                 [
                     20..25,
-                ],
-            ),
-            (
-                22..22,
-                [
-                    20..25,
-                    22..30,
                 ],
             ),
             (
@@ -321,14 +287,6 @@ mod tests {
                 [
                     20..25,
                     22..30,
-                ],
-            ),
-            (
-                23..23,
-                [
-                    20..25,
-                    22..30,
-                    23..35,
                 ],
             ),
             (
@@ -442,24 +400,10 @@ mod tests {
         assert_debug_snapshot!(result, @r"
         [
             (
-                0..0,
-                [
-                    Diff(Same),
-                    Color(Blue),
-                ],
-            ),
-            (
                 0..2,
                 [
                     Diff(Same),
                     Color(Blue),
-                ],
-            ),
-            (
-                2..2,
-                [
-                    Color(Blue),
-                    Diff(Changed),
                 ],
             ),
             (
@@ -472,13 +416,6 @@ mod tests {
             (
                 3..5,
                 [
-                    Diff(Changed),
-                ],
-            ),
-            (
-                5..5,
-                [
-                    Color(Yellow),
                     Diff(Changed),
                 ],
             ),
@@ -496,13 +433,6 @@ mod tests {
                 ],
             ),
             (
-                9..9,
-                [
-                    Diff(Changed),
-                    Color(Blue),
-                ],
-            ),
-            (
                 9..10,
                 [
                     Diff(Changed),
@@ -513,13 +443,6 @@ mod tests {
                 10..11,
                 [
                     Color(Blue),
-                ],
-            ),
-            (
-                11..11,
-                [
-                    Color(Blue),
-                    Diff(Same),
                 ],
             ),
             (
