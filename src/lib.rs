@@ -579,4 +579,22 @@ mod tests {
         ]
         ");
     }
+
+    #[test]
+    #[should_panic(expected = "Input intervals were not properly sorted")]
+    fn test_unsorted_input_panics() {
+        // Unsorted by start point: 2..3 then 0..1
+        let input = vec![i(2..3), i(0..1)];
+        let _ =
+            SplitIntoDisjointRanges::from_sorted_intervals(input.into_iter()).collect::<Vec<_>>();
+    }
+
+    #[test]
+    #[should_panic(expected = "Interval start must be <= end")]
+    fn test_inverted_interval_panics() {
+        // Inverted interval should trigger assertion in ActiveIntervalsOrderedByEndpoint::add
+        let input = vec![i(Range { start: 5, end: 3 })];
+        let _ =
+            SplitIntoDisjointRanges::from_sorted_intervals(input.into_iter()).collect::<Vec<_>>();
+    }
 }
