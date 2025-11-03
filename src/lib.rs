@@ -2,6 +2,16 @@ use std::{cmp::min, collections::BTreeMap, fmt::Debug, iter::Peekable, ops::Rang
 
 // Alternative: <https://github.com/sstadick/rust-lapper>. It stores the entire
 // tree of intervals, we don't.
+// <https://docs.rs/store-interval-tree/latest/store_interval_tree/struct.IntervalTree.html>
+// is similar but older.
+//
+// https://docs.rs/rust_intervals/latest/rust_intervals/struct.IntervalSet.html
+// with the "intersection" policy might be interesting and similar to the above,
+// but is under-documented.
+//
+// Less looked at: https://github.com/pkhuong/closed-interval-set,
+// https://docs.rs/rb-interval-map/latest/rb_interval_map/,
+// https://github.com/noamteyssier/bedrs
 
 /// A labeled half-open interval: `start..end` and a label
 pub type Interval<Ix, Label> = (Range<Ix>, Label);
@@ -13,6 +23,10 @@ pub fn start_point_before<Ix: Ord, Label>(
 ) -> bool {
     a.0.start < b.0.start
 }
+
+// TODO: a helper for intersecting a stream of intervals with a set of disjoint
+// intervals, to restrict to hunks before invoking `SplitIntoDisjointRanges`.
+// might be similar or useful, or not.
 
 /// Iterator that intersects a set of intervals until it becomes disjoint.
 ///
@@ -144,6 +158,8 @@ struct ActiveIntervalsOrderedByEndpoint<Ix: Ord + Clone, Label: Clone>(
     // of labels that overlap and the number is usually known at compile time.
     // We'd then want to parametrize by the number of elements to initialize
     // SmallVec with.
+    //
+    // Should have some tests before doing optimizations.
     BTreeMap<Ix, Vec<Interval<Ix, Label>>>,
 );
 
@@ -329,7 +345,7 @@ mod tests {
             ),
         ]
         ");
-        // TODO: empty range in input. Also maybe:
+        // TODO: smaller example with empty range in input. Also maybe:
         let weird = Range { start: 5, end: 3 };
         dbg!(weird.clone(), weird.end, weird.end_bound());
     }
