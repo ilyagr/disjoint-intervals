@@ -227,6 +227,105 @@ mod tests {
         let result: Vec<_> =
             SplitIntoDisjointRanges::from_sorted_intervals(empty.into_iter()).collect();
         assert_debug_snapshot!(result, @"[]");
+        let input: Vec<_> = vec![(i(0..5))];
+        let result: Vec<_> =
+            SplitIntoDisjointRanges::from_sorted_intervals(input.into_iter()).collect();
+        assert_debug_snapshot!(result, @r"
+        [
+            (
+                0..5,
+                [
+                    0..5,
+                ],
+            ),
+        ]
+        ");
+        let input: Vec<_> = vec![i(5..5)];
+        let result: Vec<_> =
+            SplitIntoDisjointRanges::from_sorted_intervals(input.into_iter()).collect();
+        assert_debug_snapshot!(result, @r"
+        [
+            (
+                5..5,
+                [
+                    5..5,
+                ],
+            ),
+        ]
+        ");
+
+        // Test handling of empty intervals (treated as infinitely-small
+        // half-open intervals at the starting point)
+        let input = vec![
+            i(0..5),
+            i(4..6),
+            i(5..5),
+            i(5..7),
+            i(7..7),
+            i(10..10),
+            i(10..11),
+        ];
+        let result: Vec<_> =
+            SplitIntoDisjointRanges::from_sorted_intervals(input.into_iter()).collect();
+        assert_debug_snapshot!(result, @r"
+        [
+            (
+                0..4,
+                [
+                    0..5,
+                ],
+            ),
+            (
+                4..5,
+                [
+                    0..5,
+                    4..6,
+                ],
+            ),
+            (
+                5..5,
+                [
+                    5..5,
+                    4..6,
+                    5..7,
+                ],
+            ),
+            (
+                5..6,
+                [
+                    4..6,
+                    5..7,
+                ],
+            ),
+            (
+                6..7,
+                [
+                    5..7,
+                ],
+            ),
+            (
+                7..7,
+                [
+                    7..7,
+                ],
+            ),
+            (
+                10..10,
+                [
+                    10..10,
+                    10..11,
+                ],
+            ),
+            (
+                10..11,
+                [
+                    10..11,
+                ],
+            ),
+        ]
+        ");
+
+        // Larger test
         let input = vec![
             i(0..5),
             i(2..2),
