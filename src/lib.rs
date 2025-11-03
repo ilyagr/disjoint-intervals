@@ -24,10 +24,6 @@ pub fn start_point_before<Ix: Ord, Label>(
     a.0.start < b.0.start
 }
 
-// TODO: a helper for intersecting a stream of intervals with a set of disjoint
-// intervals, to restrict to hunks before invoking `SplitIntoDisjointRanges`.
-// might be similar or useful, or not.
-
 /// Iterator that intersects a set of intervals until it becomes disjoint.
 ///
 /// Computes the disjoint intersections of an arbitrary set of labeled half-open
@@ -578,5 +574,61 @@ mod tests {
             ),
         ]
         ");
+    }
+}
+
+// TODO: Switch to half-open intervals? Then intersection could be a vector of
+// half-open intervals.
+//
+// Separate start and end point vectors?
+#[derive(Debug, Clone)]
+pub struct DisjointClosedIntervals<Ix: Ord + Clone>(
+    /// Sorted vector of interval endpoints. Endpoints at even indices begin
+    /// intervals, endpoints at odd indices end intervals.
+    Vec<Ix>,
+);
+
+impl<Ix: Ord + Clone> DisjointClosedIntervals<Ix> {
+    /// Initialize from a sorted vector of interval endpoints.
+    ///
+    /// Endpoints at even indices begin intervals, endpoints at odd indices end
+    /// intervals.
+    pub fn from_sorted_endpoints(sorted_endpoints: Vec<Ix>) -> Self {
+        DisjointClosedIntervals(sorted_endpoints)
+    }
+
+    /// Intersect with a half-open interval. Returns `None` if the intersection
+    /// is empty. If the half-open interval intersects with multiple closed
+    /// intervals, returns a single half-open interval that covers all of them.
+    pub fn intersect_with_half_open_interval(&self, range: &Range<Ix>) -> Option<Range<Ix>> {
+        let Range { start, end } = range;
+        let start_ix = self.0.partition_point(|x| x < start);
+        if start_ix >= self.0.len() {
+            return None;
+        };
+        let end_ix = self.0.partition_point(|x| x <= end);
+        assert!(end_ix >= start_ix);
+        let new_start = if start_ix % 2 == 0 {
+            // The beginning of the interval at start_ix is the first element `>= start`
+            if end_ix == start_ix {
+                // This beginning of the interval is `> end`.
+                return None;
+            }
+            self.0[start_ix].clone()
+        } else {
+            // start is inside an interval
+            start.clone()
+        };
+
+        assert!(end_ix != 0 && end_ix <= self.0.len());
+        assert!(self.0.len().is_multiple_of(2));
+        let new_end = if end_ix % 2 == 0 {
+            // The end of the interval at end_ix - 1 is the last element `<= end`
+            self.0[end_ix - 1].clone()
+        } else {
+            // end is inside an interval
+            end.clone()
+        };
+        Some(new_start..new_end)
     }
 }
