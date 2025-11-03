@@ -32,7 +32,7 @@ pub fn start_point_before<Ix: Ord, Label>(
 /// Inverted intervals (with `start > end`) are not allowed and will cause a
 /// panic.
 #[derive(Debug, Clone)]
-pub struct DisjointRanges<
+pub struct SplitIntoDisjointRanges<
     Ix: Ord + Clone,
     Label: Clone,
     InputIter: Iterator<Item = Interval<Ix, Label>>,
@@ -48,7 +48,7 @@ pub struct DisjointRanges<
 }
 
 impl<Ix: Ord + Clone, Label: Clone, InputIter: Iterator<Item = Interval<Ix, Label>>>
-    DisjointRanges<Ix, Label, InputIter>
+    SplitIntoDisjointRanges<Ix, Label, InputIter>
 {
     /// Initialize from input sorted by the *start* of each interval.
     ///
@@ -57,9 +57,11 @@ impl<Ix: Ord + Clone, Label: Clone, InputIter: Iterator<Item = Interval<Ix, Labe
     ///
     /// [`start_point_before`] can be used with `itertools::kmerge_by` or
     /// `sort_by` to get appropriately ordered intervals.
-    pub fn from_sorted_input(sorted_input: InputIter) -> DisjointRanges<Ix, Label, InputIter> {
-        DisjointRanges {
-            sorted_input: sorted_input.peekable(),
+    pub fn from_sorted_intervals(
+        sorted_intervals: InputIter,
+    ) -> SplitIntoDisjointRanges<Ix, Label, InputIter> {
+        SplitIntoDisjointRanges {
+            sorted_input: sorted_intervals.peekable(),
             position: None,
             active_intervals: ActiveIntervalsOrderedByEndpoint::new(),
         }
@@ -67,7 +69,7 @@ impl<Ix: Ord + Clone, Label: Clone, InputIter: Iterator<Item = Interval<Ix, Labe
 }
 
 impl<Ix: Ord + Clone, Label: Clone, InputIter: Iterator<Item = Interval<Ix, Label>>> Iterator
-    for DisjointRanges<Ix, Label, InputIter>
+    for SplitIntoDisjointRanges<Ix, Label, InputIter>
 {
     type Item = Interval<Ix, Vec<Label>>;
 
@@ -208,7 +210,8 @@ mod tests {
     #[test]
     fn test_algorithm() {
         let empty: Vec<Interval<usize, ()>> = vec![];
-        let result: Vec<_> = DisjointRanges::from_sorted_input(empty.into_iter()).collect();
+        let result: Vec<_> =
+            SplitIntoDisjointRanges::from_sorted_intervals(empty.into_iter()).collect();
         assert_debug_snapshot!(result, @"[]");
         let input = vec![
             i(0..5),
@@ -222,7 +225,8 @@ mod tests {
             i(22..30),
             i(23..35),
         ];
-        let result: Vec<_> = DisjointRanges::from_sorted_input(input.into_iter()).collect();
+        let result: Vec<_> =
+            SplitIntoDisjointRanges::from_sorted_intervals(input.into_iter()).collect();
         assert_debug_snapshot!(result, @r"
         [
             (
@@ -409,7 +413,8 @@ mod tests {
             ),
         ]
         ");
-        let result: Vec<_> = DisjointRanges::from_sorted_input(input.into_iter()).collect();
+        let result: Vec<_> =
+            SplitIntoDisjointRanges::from_sorted_intervals(input.into_iter()).collect();
         assert_debug_snapshot!(result, @r"
         [
             (
