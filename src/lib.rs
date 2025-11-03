@@ -688,4 +688,93 @@ mod tests {
         let _ =
             SplitIntoDisjointRanges::from_sorted_intervals(input.into_iter()).collect::<Vec<_>>();
     }
+
+    // ----- ActiveIntervalsOrderedByEndpoint behavior tests -----
+
+    // Verifies basic lifecycle: empty -> add intervals -> next_end updates as
+    // smaller ends arrive -> forgetting at/before a position advances the
+    // smallest end correctly; forgetting before the smallest end is a no-op.
+    #[test]
+    fn test_active_next_end_and_is_empty() {
+        let mut a: ActiveIntervalsOrderedByEndpoint<usize, &str> =
+            ActiveIntervalsOrderedByEndpoint::new();
+        assert!(a.is_empty());
+        assert_eq!(a.next_end(), None);
+
+        a.add((0..3, "a"));
+        assert!(!a.is_empty());
+        assert_eq!(a.next_end(), Some(&3));
+
+        a.add((1..5, "b"));
+        assert_eq!(a.next_end(), Some(&3));
+
+        a.add((0..1, "c"));
+        assert_eq!(a.next_end(), Some(&1));
+
+        a.forget_intervals_ending_at_or_before(&1);
+        assert_eq!(a.next_end(), Some(&3));
+
+        // Forgetting before the smallest end should be a no-op
+        a.forget_intervals_ending_at_or_before(&2);
+        assert_eq!(a.next_end(), Some(&3));
+    }
+
+    // Verifies that all_labels returns the labels of all active intervals,
+    // regardless of internal storage ordering. We compare sets by sorting the
+    // result to avoid coupling to implementation details.
+    #[test]
+    fn test_active_all_labels_order_agnostic() {
+        let mut a: ActiveIntervalsOrderedByEndpoint<usize, &str> =
+            ActiveIntervalsOrderedByEndpoint::new();
+        a.add((0..3, "a"));
+        a.add((1..5, "b"));
+        a.add((2..5, "c")); // same end as "b"
+
+        let mut got = a.all_labels();
+        got.sort();
+        assert_eq!(got, vec!["a", "b", "c"]);
+
+        // After forgetting up to 3, only the 5-ending intervals remain
+        a.forget_intervals_ending_at_or_before(&3);
+        let mut got = a.all_labels();
+        got.sort();
+        assert_eq!(got, vec!["b", "c"]);
+    }
+
+    // Ensures that forgetting at a position removes every interval whose end
+    // is <= that position, including multiple intervals that share the same
+    // end point. Also checks that empty intervals (start == end) are handled.
+    #[test]
+    fn test_active_forget_removes_all_at_or_before() {
+        let mut a: ActiveIntervalsOrderedByEndpoint<usize, &str> =
+            ActiveIntervalsOrderedByEndpoint::new();
+
+        // Three intervals ending at 5 (including an empty 5..5), and one ending at 6
+        a.add((0..5, "x1"));
+        a.add((3..5, "x2"));
+        a.add((5..5, "x0"));
+        a.add((5..6, "y"));
+
+        // Before forgetting, all four labels are present
+        let mut got = a.all_labels();
+        got.sort();
+        assert_eq!(got, vec!["x0", "x1", "x2", "y"]);
+
+        // Forget everything ending at or before 5; only the 6-ending interval remains
+        a.forget_intervals_ending_at_or_before(&5);
+        assert_eq!(a.next_end(), Some(&6));
+        let mut got = a.all_labels();
+        got.sort();
+        assert_eq!(got, vec!["y"]);
+    }
+
+    // Directly validates the inverted-interval assertion at the ActiveIntervals
+    // layer. This complements the higher-level panic test through the iterator.
+    #[test]
+    #[should_panic(expected = "Interval start must be <= end")]
+    fn test_active_add_inverted_interval_panics() {
+        let mut a: ActiveIntervalsOrderedByEndpoint<usize, &str> =
+            ActiveIntervalsOrderedByEndpoint::new();
+        a.add((Range { start: 5, end: 3 }, "bad"));
+    }
 }
