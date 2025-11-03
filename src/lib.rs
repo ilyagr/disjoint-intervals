@@ -580,6 +580,97 @@ mod tests {
         ");
     }
 
+    // This test exercises the "admit then split" logic: when multiple
+    // intervals share the exact same start (including empty intervals), the
+    // iterator must admit all of them into the active set before producing the
+    // next output segment. The first produced segment is 5..5, labeled by all
+    // intervals active at position 5, including non-empty ones; then subsequent
+    // segments shrink the active set as ends are reached.
+    #[test]
+    fn test_many_same_start_including_empties() {
+        let input = vec![i(5..5), i(5..7), i(5..10), i(5..6)];
+        let result: Vec<_> =
+            SplitIntoDisjointRanges::from_sorted_intervals(input.into_iter()).collect();
+        assert_debug_snapshot!(result, @r"
+        [
+            (
+                5..5,
+                [
+                    5..5,
+                    5..6,
+                    5..7,
+                    5..10,
+                ],
+            ),
+            (
+                5..6,
+                [
+                    5..6,
+                    5..7,
+                    5..10,
+                ],
+            ),
+            (
+                6..7,
+                [
+                    5..7,
+                    5..10,
+                ],
+            ),
+            (
+                7..10,
+                [
+                    5..10,
+                ],
+            ),
+        ]
+        ");
+    }
+
+    // This test ensures that when several active intervals share the same end,
+    // they are all forgotten in one step at that position. We set up three
+    // intervals ending at 5 with different starts, then introduce an interval
+    // starting at 5. After emitting 4..5 (labels for all three), advancing to
+    // position 5 must drop all the 5-ending intervals, and only then admit the
+    // 5..8 interval.
+    #[test]
+    fn test_identical_end_points_drop_all() {
+        let input = vec![i(0..5), i(3..5), i(4..5), i(5..8)];
+        let result: Vec<_> =
+            SplitIntoDisjointRanges::from_sorted_intervals(input.into_iter()).collect();
+        assert_debug_snapshot!(result, @r"
+        [
+            (
+                0..3,
+                [
+                    0..5,
+                ],
+            ),
+            (
+                3..4,
+                [
+                    0..5,
+                    3..5,
+                ],
+            ),
+            (
+                4..5,
+                [
+                    0..5,
+                    3..5,
+                    4..5,
+                ],
+            ),
+            (
+                5..8,
+                [
+                    5..8,
+                ],
+            ),
+        ]
+        ");
+    }
+
     #[test]
     #[should_panic(expected = "Input intervals were not properly sorted")]
     fn test_unsorted_input_panics() {
