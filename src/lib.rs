@@ -383,8 +383,8 @@ mod tests {
         use Color::*;
         use Diff::*;
         // Has to be sorted
-        let syntax_highlighting = vec![(0..3, Blue), (5..8, Yellow), (9..15, Blue)];
-        let diffs = vec![(0..2, Same), (2..10, Changed), (11..15, Same)];
+        let syntax_highlighting = vec![(0..3, Blue), (5..8, Yellow), (10..13, Blue)];
+        let diffs = vec![(0..2, Same), (2..10, Changed), (10..15, Same)];
 
         assert!(syntax_highlighting.is_sorted_by(start_point_before));
         assert!(diffs.is_sorted_by(start_point_before));
@@ -420,11 +420,11 @@ mod tests {
                 Color(Yellow),
             ),
             (
-                9..15,
+                10..13,
                 Color(Blue),
             ),
             (
-                11..15,
+                10..15,
                 Diff(Same),
             ),
         ]
@@ -461,28 +461,21 @@ mod tests {
                 ],
             ),
             (
-                8..9,
+                8..10,
                 [
                     Diff(Changed),
                 ],
             ),
             (
-                9..10,
+                10..13,
                 [
-                    Diff(Changed),
                     Color(Blue),
+                    Diff(Same),
                 ],
             ),
             (
-                10..11,
+                13..15,
                 [
-                    Color(Blue),
-                ],
-            ),
-            (
-                11..15,
-                [
-                    Color(Blue),
                     Diff(Same),
                 ],
             ),
