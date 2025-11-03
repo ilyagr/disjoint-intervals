@@ -213,10 +213,8 @@ impl<Ix: Ord + Clone + Eq + std::hash::Hash, Label: Clone>
     fn all_labels(&self) -> Vec<Label> {
         // Preserve the historical ordering: by increasing end, and for the
         // same end keep insertion order within the Vec.
-        let mut entries: Vec<_> = self.map.iter().collect();
-        entries.sort_by(|(k1, _), (k2, _)| k1.cmp(k2));
-        entries
-            .into_iter()
+        self.map
+            .iter()
             .flat_map(|(_, v)| v.iter().map(|(_range, label)| label.clone()))
             .collect()
     }
@@ -308,8 +306,8 @@ mod tests {
             (
                 5..5,
                 [
-                    5..5,
                     4..6,
+                    5..5,
                     5..7,
                 ],
             ),
@@ -374,8 +372,8 @@ mod tests {
             (
                 2..2,
                 [
-                    2..2,
                     0..5,
+                    2..2,
                 ],
             ),
             (
@@ -400,8 +398,8 @@ mod tests {
             (
                 8..8,
                 [
-                    8..8,
                     8..9,
+                    8..8,
                 ],
             ),
             (
@@ -453,8 +451,8 @@ mod tests {
             (
                 25..30,
                 [
-                    22..30,
                     23..35,
+                    22..30,
                 ],
             ),
             (
@@ -556,8 +554,8 @@ mod tests {
             (
                 0..2,
                 [
-                    Diff(Same),
                     Color(Blue),
+                    Diff(Same),
                 ],
             ),
             (
@@ -576,8 +574,8 @@ mod tests {
             (
                 5..8,
                 [
-                    Color(Yellow),
                     Diff(Changed),
+                    Color(Yellow),
                 ],
             ),
             (
@@ -620,9 +618,9 @@ mod tests {
                 5..5,
                 [
                     5..5,
-                    5..6,
                     5..7,
                     5..10,
+                    5..6,
                 ],
             ),
             (
@@ -636,8 +634,8 @@ mod tests {
             (
                 6..7,
                 [
-                    5..7,
                     5..10,
+                    5..7,
                 ],
             ),
             (
