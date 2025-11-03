@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 itertools = "0.14.0"
+indexmap = "2"
 
 [dev-dependencies]
 insta = "1.43.2"
