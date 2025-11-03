@@ -88,25 +88,17 @@ impl<Ix: Ord + Clone, Label: Clone, InputIter: Iterator<Item = Interval<Ix, Labe
     type Item = Interval<Ix, Vec<Label>>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let mut next_range_start;
-        loop {
+        let mut next_range_start: Option<Ix>;
+        let this_interval_start: Ix = loop {
             next_range_start = self
                 .sorted_input
                 .peek()
                 .map(|(Range { start, .. }, _label)| start.clone());
-            if self.position.is_none() {
-                assert!(
-                    self.active_intervals.is_empty(),
-                    "Very first next() invocation"
-                );
-                // Note the `?` that returns None if everything is empty
-                self.position = Some(next_range_start.as_ref()?.clone());
-            };
             match next_range_start {
-                Some(next_start) if next_start < self.position.as_ref().unwrap().clone() => {
+                Some(next_start) if self.position.as_ref().is_some_and(|p| p > &next_start) => {
                     panic!("Input intervals were not properly sorted")
                 }
-                Some(next_start) if next_start == self.position.as_ref().unwrap().clone() => {
+                Some(next_start) if self.position.as_ref().is_some_and(|p| p == &next_start) => {
                     let (range, label) = self.sorted_input.next().unwrap();
                     self.active_intervals.add((range, label));
                 }
@@ -117,28 +109,34 @@ impl<Ix: Ord + Clone, Label: Clone, InputIter: Iterator<Item = Interval<Ix, Labe
                     // `None`, and of `next_range_start` as positive infinity if
                     // it is `None`.
                     if !self.active_intervals.is_empty() {
-                        break;
+                        // `self.position` had to become `Some` before any
+                        // intervals could be added to `active_intervals`, and
+                        // it never becomes `None` again.
+                        break self.position.as_ref().unwrap().clone();
                     };
                     // No active intervals, and no new intervals to add, so we
-                    // can either skip ahead or quit
+                    // can either skip ahead (`self.position` will equal
+                    // `next_range_start` on the next iteration) or quit.
+                    //
+                    // Note the `?` that returns None if everything is empty
                     self.position = Some(next_range_start.as_ref()?.clone());
                 }
             }
-        }
+        };
 
-        let next_end = self.active_intervals.next_end().cloned().unwrap();
+        let next_active_end = self.active_intervals.next_end().cloned().unwrap();
         let stop_at = match next_range_start {
-            Some(next_start) => min(next_start, next_end),
-            None => next_end,
+            Some(next_start) => min(next_start, next_active_end),
+            None => next_active_end,
         };
         let result = (
-            self.position.as_ref().unwrap().clone()..stop_at.clone(),
+            this_interval_start..stop_at.clone(),
             self.active_intervals.all_labels(),
         );
 
-        self.position = Some(stop_at.clone());
         self.active_intervals
             .forget_intervals_ending_at_or_before(&stop_at);
+        self.position = Some(stop_at);
         Some(result)
     }
 }
