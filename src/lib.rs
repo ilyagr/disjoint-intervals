@@ -195,9 +195,7 @@ impl<Ix: Ord + Clone + Eq + std::hash::Hash, Label: Clone>
         // With eager removals, the heap and map are in sync: the heap's top
         // must correspond to a key in the map. We still resolve through the
         // map to return a reference tied to the map's key.
-        self.heap
-            .peek()
-            .and_then(|Reverse(candidate)| self.map.get_key_value(candidate).map(|(k, _)| k))
+        self.heap.peek().map(|Reverse(ix)| ix)
     }
 
     fn forget_intervals_ending_at_or_before(&mut self, position: &Ix) {
