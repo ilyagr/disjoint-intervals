@@ -612,40 +612,44 @@ impl<Ix: Ord + Clone> DisjointHalfOpenIntervals<Ix> {
             end: input_end,
         } = input;
 
-        let start_ix = self.ends.partition_point(|x| x < input_start);
-        let new_start = if start_ix >= self.starts.len() {
+        // Find the first interval that ends after input_start
+        let start_ix = self.ends.partition_point(|x| x <= input_start);
+        if start_ix >= self.starts.len() {
+            // input_start is after all intervals
             return vec![];
-        } else if &self.starts[start_ix] >= input_start {
-            // input_start is between intervals
-            self.starts[start_ix].clone()
-        } else {
-            // input_start is inside an interval
-            input_start.clone()
-        };
-
-        let end_ix = self.starts.partition_point(|x| x <= input_end);
-        let new_end = if end_ix == 0 {
-            return vec![];
-        } else if &self.ends[end_ix - 1] <= input_end {
-            // input_end is between intervals
-            self.ends[end_ix - 1].clone()
-        } else {
-            // input_end is inside an interval
-            input_end.clone()
-        };
-
-        assert!(end_ix >= start_ix);
-        if start_ix == end_ix {
-            vec![new_start..new_end]
-        } else {
-            let mut result = Vec::with_capacity(end_ix - start_ix + 1);
-            result.push(new_start..self.ends[start_ix].clone());
-            for ix in (start_ix + 1)..(end_ix - 1) {
-                result.push(self.starts[ix].clone()..self.ends[ix].clone());
-            }
-            result.push(self.starts[end_ix - 1].clone()..new_end);
-            result
         }
+
+        // Find the last interval that starts before input_end
+        let end_ix = self.starts.partition_point(|x| x < input_end);
+        if end_ix == 0 {
+            // input_end is before all intervals
+            return vec![];
+        }
+
+        // Check if there's actually an overlap
+        if start_ix >= end_ix {
+            // No overlap: input falls between intervals
+            return vec![];
+        }
+
+        // Now we know intervals [start_ix..end_ix) overlap with input
+        let mut result = Vec::with_capacity(end_ix - start_ix);
+
+        for ix in start_ix..end_ix {
+            let range_start = if &self.starts[ix] > input_start {
+                self.starts[ix].clone()
+            } else {
+                input_start.clone()
+            };
+            let range_end = if &self.ends[ix] < input_end {
+                self.ends[ix].clone()
+            } else {
+                input_end.clone()
+            };
+            result.push(range_start..range_end);
+        }
+
+        result
     }
 }
 
@@ -662,28 +666,15 @@ mod tests2 {
         assert_debug_snapshot!(t(3..10), @r"
         [
             3..5,
-            10..10,
         ]
         ");
-        // BUG?
         assert_debug_snapshot!(t(5..12), @r"
         [
-            5..5,
             10..12,
         ]
         ");
-        assert_debug_snapshot!(t(5..7), @r"
-        [
-            5..5,
-            0..5,
-        ]
-        ");
-        // BUG!
-        assert_debug_snapshot!(t(6..7), @r"
-        [
-            10..5,
-        ]
-        ");
+        assert_debug_snapshot!(t(5..7), @"[]");
+        assert_debug_snapshot!(t(6..7), @"[]");
         assert_debug_snapshot!(t(3..18), @r"
         [
             3..5,
@@ -694,7 +685,6 @@ mod tests2 {
         [
             3..5,
             10..15,
-            20..20,
         ]
         ");
         assert_debug_snapshot!(t(3..21), @r"
@@ -710,26 +700,11 @@ mod tests2 {
         // BUGS
         assert_debug_snapshot!(t(3..3), @r"
         [
-            3..5,
-            0..3,
+            3..3,
         ]
         ");
-        assert_debug_snapshot!(t(5..5), @r"
-        [
-            5..5,
-            0..5,
-        ]
-        ");
-        assert_debug_snapshot!(t(7..7), @r"
-        [
-            10..5,
-        ]
-        ");
-        assert_debug_snapshot!(t(10..10), @r"
-        [
-            10..15,
-            10..10,
-        ]
-        ");
+        assert_debug_snapshot!(t(5..5), @"[]");
+        assert_debug_snapshot!(t(7..7), @"[]");
+        assert_debug_snapshot!(t(10..10), @"[]");
     }
 }
