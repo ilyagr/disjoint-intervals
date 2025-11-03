@@ -1,11 +1,11 @@
+use indexmap::IndexMap;
 use std::{
-    cmp::{min, Reverse},
+    cmp::{Reverse, min},
     collections::BinaryHeap,
     fmt::Debug,
     iter::Peekable,
     ops::Range,
 };
-use indexmap::IndexMap;
 
 // Alternative: <https://github.com/sstadick/rust-lapper>. It stores the entire
 // tree of intervals, we don't.
@@ -69,11 +69,10 @@ pub struct SplitIntoDisjointRanges<
 }
 
 impl<
-        Ix: Ord + Clone + Eq + std::hash::Hash,
-        Label: Clone,
-        InputIter: Iterator<Item = Interval<Ix, Label>>,
-    >
-    SplitIntoDisjointRanges<Ix, Label, InputIter>
+    Ix: Ord + Clone + Eq + std::hash::Hash,
+    Label: Clone,
+    InputIter: Iterator<Item = Interval<Ix, Label>>,
+> SplitIntoDisjointRanges<Ix, Label, InputIter>
 {
     /// Initialize from input sorted by the *start* of each interval.
     ///
@@ -94,11 +93,10 @@ impl<
 }
 
 impl<
-        Ix: Ord + Clone + Eq + std::hash::Hash,
-        Label: Clone,
-        InputIter: Iterator<Item = Interval<Ix, Label>>,
-    > Iterator
-    for SplitIntoDisjointRanges<Ix, Label, InputIter>
+    Ix: Ord + Clone + Eq + std::hash::Hash,
+    Label: Clone,
+    InputIter: Iterator<Item = Interval<Ix, Label>>,
+> Iterator for SplitIntoDisjointRanges<Ix, Label, InputIter>
 {
     type Item = Interval<Ix, Vec<Label>>;
 
@@ -164,7 +162,9 @@ struct ActiveIntervalsOrderedByEndpoint<Ix: Ord + Clone + Eq + std::hash::Hash, 
     map: IndexMap<Ix, Vec<Interval<Ix, Label>>>,
 }
 
-impl<Ix: Ord + Clone + Eq + std::hash::Hash, Label: Clone> ActiveIntervalsOrderedByEndpoint<Ix, Label> {
+impl<Ix: Ord + Clone + Eq + std::hash::Hash, Label: Clone>
+    ActiveIntervalsOrderedByEndpoint<Ix, Label>
+{
     fn new() -> Self {
         ActiveIntervalsOrderedByEndpoint {
             heap: BinaryHeap::new(),
@@ -192,65 +192,23 @@ impl<Ix: Ord + Clone + Eq + std::hash::Hash, Label: Clone> ActiveIntervalsOrdere
 
     /// The smallest endpoint of all intervals in the set
     fn next_end(&self) -> Option<&Ix> {
-        // We need to return a reference to the key stored in the map to avoid
-        // changing the public signature. Therefore, peek the heap for the
-        // smallest end, then look it up in the map; if it's missing (stale
-        // heap entry), we'll need to pop it. Because we can't mutate here,
-        // perform a read loop via a helper on &mut self instead.
-        //
-        // Implement the logic in a small internal function that takes &mut self.
-        // See below.
-        self.peek_min_end_from_heap_ref()
-    }
-
-    fn peek_min_end_from_heap_ref(&self) -> Option<&Ix> {
-        // Non-mutating path: keep peeking until we find a key still present.
-        // Because we cannot pop from the heap here, we may encounter stale
-        // entries. Fall back to scanning map for the smallest key if needed.
-        // To keep complexity reasonable, we perform a quick check: if the heap
-        // top exists in the map, return its reference; otherwise, scan the map
-        // to find the smallest key as a conservative answer.
-        if let Some(Reverse(candidate)) = self.heap.peek() {
-            if let Some((k_ref, _)) = self.map.get_key_value(candidate) {
-                return Some(k_ref);
-            }
-        }
-        // Fallback: the heap's top is stale (or heap empty). Return the first
-        // key in iteration order. IndexMap preserves insertion order, which is
-        // not sorted; however, correctness requires the minimum end, not the
-        // earliest inserted. To avoid relying on insertion order, find the
-        // minimum key by iteration.
-        self.map
-            .keys()
-            .min()
-            .and_then(|min_key| self.map.get_key_value(min_key).map(|(k, _)| k))
+        // With eager removals, the heap and map are in sync: the heap's top
+        // must correspond to a key in the map. We still resolve through the
+        // map to return a reference tied to the map's key.
+        self.heap
+            .peek()
+            .and_then(|Reverse(candidate)| self.map.get_key_value(candidate).map(|(k, _)| k))
     }
 
     fn forget_intervals_ending_at_or_before(&mut self, position: &Ix) {
-        // Repeatedly remove all keys <= position. Use heap to find candidates;
-        // lazily skip stale heap entries.
-        loop {
-            let next = loop {
-                match self.heap.peek() {
-                    Some(Reverse(candidate)) => {
-                        if self.map.contains_key(candidate) {
-                            break Some(candidate.clone());
-                        } else {
-                            // Stale entry
-                            self.heap.pop();
-                        }
-                    }
-                    None => break None,
-                }
-            };
-
-            match next {
-                Some(end) if end <= *position => {
-                    // Remove the key from the map; keep heap lazy.
-                    let _ = self.map.shift_remove(&end);
-                }
-                _ => break,
+        // Eagerly remove: pop heap and remove from map while top <= position.
+        while let Some(Reverse(candidate)) = self.heap.peek() {
+            if candidate > position {
+                break;
             }
+            // Pop the heap entry first, then drop the map entry.
+            let Reverse(end) = self.heap.pop().expect("peek succeeded");
+            let _ = self.map.swap_remove(&end);
         }
     }
 
@@ -266,10 +224,8 @@ impl<Ix: Ord + Clone + Eq + std::hash::Hash, Label: Clone> ActiveIntervalsOrdere
     }
 }
 
-impl<
-        Ix: Ord + Clone + Eq + std::hash::Hash + std::fmt::Debug,
-        Label: Clone + Debug,
-    > Debug for ActiveIntervalsOrderedByEndpoint<Ix, Label>
+impl<Ix: Ord + Clone + Eq + std::hash::Hash + std::fmt::Debug, Label: Clone + Debug> Debug
+    for ActiveIntervalsOrderedByEndpoint<Ix, Label>
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.map.fmt(f)
