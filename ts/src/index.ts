@@ -1,12 +1,20 @@
 import { Heap } from 'heap-js';
 
-export type Interval<Label> = [[number, number], Label];
+export class Range {
+  constructor(public start: number, public end: number) {}
+  toString(): string {
+    return `${this.start}..${this.end}`;
+  }
+  toJSON(): string {
+    // Make snapshots render ranges as a concise string
+    return this.toString();
+  }
+}
 
-export function startPointBefore<Label>(
-  a: Interval<Label>,
-  b: Interval<Label>,
-): boolean {
-  return a[0][0] < b[0][0];
+export type Interval<Label> = [Range, Label];
+
+export function startPointBefore<Label>(a: Interval<Label>, b: Interval<Label>): boolean {
+  return a[0].start < b[0].start;
 }
 
 export class ActiveIntervalsOrderedByEndpoint<Label> {
@@ -24,7 +32,7 @@ export class ActiveIntervalsOrderedByEndpoint<Label> {
   }
 
   add(interval: Interval<Label>): void {
-    const [[start, end]] = interval;
+    const [{ start, end }] = interval;
     if (!(start <= end)) throw new Error('Interval start must be <= end');
 
     const endKey = end;
@@ -90,14 +98,14 @@ export class SplitIntoDisjointRanges<Label> implements Iterable<Interval<Label[]
     const self = this;
     return (function* () {
       while (true) {
-        let thisIntervalStart: number;
+  let thisIntervalStart: number;
 
         // Establish start position and admit all intervals at that start
         while (true) {
           if (self.position === undefined) {
             const p = self.peek();
             if (!p) return; // no input at all
-            self.position = p[0][0];
+            self.position = p[0].start;
           }
           thisIntervalStart = self.position as number;
 
@@ -105,7 +113,7 @@ export class SplitIntoDisjointRanges<Label> implements Iterable<Interval<Label[]
           while (true) {
             const nxt = self.peek();
             if (!nxt) break;
-            const start = nxt[0][0];
+            const start = nxt[0].start;
             if (start < thisIntervalStart)
               throw new Error('Input intervals were not properly sorted');
             if (start !== thisIntervalStart) break;
@@ -118,7 +126,7 @@ export class SplitIntoDisjointRanges<Label> implements Iterable<Interval<Label[]
             // nothing active yet, move position to next start (if any), and loop
             const nxt = self.peek();
             if (!nxt) return; // completely done
-            const nextStart = nxt[0][0];
+            const nextStart = nxt[0].start;
             if (nextStart < thisIntervalStart)
               throw new Error('Input intervals were not properly sorted');
             self.position = nextStart;
@@ -130,7 +138,7 @@ export class SplitIntoDisjointRanges<Label> implements Iterable<Interval<Label[]
 
         const nextRangeStart = (() => {
           const nxt = self.peek();
-          return nxt ? nxt[0][0] : undefined;
+          return nxt ? nxt[0].start : undefined;
         })();
 
         const nextActiveEnd = self.active.nextEnd();
@@ -139,8 +147,8 @@ export class SplitIntoDisjointRanges<Label> implements Iterable<Interval<Label[]
         let stopAt = nextActiveEnd;
         if (nextRangeStart !== undefined && nextRangeStart < stopAt) stopAt = nextRangeStart;
 
-        const labels = self.active.allLabels();
-        const result: Interval<Label[]> = [[thisIntervalStart, stopAt], labels];
+  const labels = self.active.allLabels();
+  const result: Interval<Label[]> = [new Range(thisIntervalStart, stopAt), labels];
         yield result;
 
         self.active.forgetIntervalsEndingAtOrBefore(stopAt);
@@ -154,7 +162,8 @@ export class SplitIntoDisjointRanges<Label> implements Iterable<Interval<Label[]
 if (import.meta.vitest) {
   const { test, expect, describe } = import.meta.vitest;
 
-  const i = (start: number, end: number): Interval<[number, number]> => [[start, end], [start, end]];
+  const r = (start: number, end: number) => new Range(start, end);
+  const i = (start: number, end: number): Interval<Range> => [r(start, end), r(start, end)];
 
   function collect<Label>(iterable: Iterable<Interval<Label>>): Array<Interval<Label>> {
     return Array.from(iterable);
@@ -173,15 +182,9 @@ if (import.meta.vitest) {
       expect(out).toMatchInlineSnapshot(`
         [
           [
+            "0..5",
             [
-              0,
-              5,
-            ],
-            [
-              [
-                0,
-                5,
-              ],
+              "0..5",
             ],
           ],
         ]
@@ -194,15 +197,9 @@ if (import.meta.vitest) {
       expect(out).toMatchInlineSnapshot(`
         [
           [
+            "5..5",
             [
-              5,
-              5,
-            ],
-            [
-              [
-                5,
-                5,
-              ],
+              "5..5",
             ],
           ],
         ]
@@ -217,75 +214,33 @@ if (import.meta.vitest) {
       expect(out).toMatchInlineSnapshot(`
         [
           [
+            "5..5",
             [
-              5,
-              5,
-            ],
-            [
-              [
-                5,
-                5,
-              ],
-              [
-                5,
-                6,
-              ],
-              [
-                5,
-                7,
-              ],
-              [
-                5,
-                10,
-              ],
+              "5..5",
+              "5..6",
+              "5..7",
+              "5..10",
             ],
           ],
           [
+            "5..6",
             [
-              5,
-              6,
-            ],
-            [
-              [
-                5,
-                6,
-              ],
-              [
-                5,
-                7,
-              ],
-              [
-                5,
-                10,
-              ],
+              "5..6",
+              "5..7",
+              "5..10",
             ],
           ],
           [
+            "6..7",
             [
-              6,
-              7,
-            ],
-            [
-              [
-                5,
-                7,
-              ],
-              [
-                5,
-                10,
-              ],
+              "5..7",
+              "5..10",
             ],
           ],
           [
+            "7..10",
             [
-              7,
-              10,
-            ],
-            [
-              [
-                5,
-                10,
-              ],
+              "5..10",
             ],
           ],
         ]
@@ -298,63 +253,30 @@ if (import.meta.vitest) {
       expect(out).toMatchInlineSnapshot(`
         [
           [
+            "0..3",
             [
-              0,
-              3,
-            ],
-            [
-              [
-                0,
-                5,
-              ],
+              "0..5",
             ],
           ],
           [
+            "3..4",
             [
-              3,
-              4,
-            ],
-            [
-              [
-                0,
-                5,
-              ],
-              [
-                3,
-                5,
-              ],
+              "0..5",
+              "3..5",
             ],
           ],
           [
+            "4..5",
             [
-              4,
-              5,
-            ],
-            [
-              [
-                0,
-                5,
-              ],
-              [
-                3,
-                5,
-              ],
-              [
-                4,
-                5,
-              ],
+              "0..5",
+              "3..5",
+              "4..5",
             ],
           ],
           [
+            "5..8",
             [
-              5,
-              8,
-            ],
-            [
-              [
-                5,
-                8,
-              ],
+              "5..8",
             ],
           ],
         ]
@@ -369,7 +291,7 @@ if (import.meta.vitest) {
     });
 
     test('inverted interval panics', () => {
-      const bad: Interval<[number, number]> = [[5, 3], [5, 3]];
+  const bad: Interval<Range> = [r(5, 3), r(5, 3)];
       const input = [bad];
       expect(() => collect(SplitIntoDisjointRanges.fromSortedIntervals(input))).toThrowError(
         'Interval start must be <= end',
@@ -383,14 +305,14 @@ if (import.meta.vitest) {
       expect(a.isEmpty()).toBe(true);
       expect(a.nextEnd()).toBeUndefined();
 
-      a.add([[0, 3], 'a']);
+  a.add([r(0, 3), 'a']);
       expect(a.isEmpty()).toBe(false);
       expect(a.nextEnd()).toBe(3);
 
-      a.add([[1, 5], 'b']);
+  a.add([r(1, 5), 'b']);
       expect(a.nextEnd()).toBe(3);
 
-      a.add([[0, 1], 'c']);
+  a.add([r(0, 1), 'c']);
       expect(a.nextEnd()).toBe(1);
 
       a.forgetIntervalsEndingAtOrBefore(1);
@@ -402,9 +324,9 @@ if (import.meta.vitest) {
 
     test('allLabels order agnostic', () => {
       const a = new ActiveIntervalsOrderedByEndpoint<string>();
-      a.add([[0, 3], 'a']);
-      a.add([[1, 5], 'b']);
-      a.add([[2, 5], 'c']);
+  a.add([r(0, 3), 'a']);
+  a.add([r(1, 5), 'b']);
+  a.add([r(2, 5), 'c']);
 
       const got1 = a.allLabels().slice().sort();
       expect(got1).toEqual(['a', 'b', 'c']);
@@ -416,10 +338,10 @@ if (import.meta.vitest) {
 
     test('forget removes all at or before', () => {
       const a = new ActiveIntervalsOrderedByEndpoint<string>();
-      a.add([[0, 5], 'x1']);
-      a.add([[3, 5], 'x2']);
-      a.add([[5, 5], 'x0']);
-      a.add([[5, 6], 'y']);
+  a.add([r(0, 5), 'x1']);
+  a.add([r(3, 5), 'x2']);
+  a.add([r(5, 5), 'x0']);
+  a.add([r(5, 6), 'y']);
 
       const before = a.allLabels().slice().sort();
       expect(before).toEqual(['x0', 'x1', 'x2', 'y']);
@@ -432,7 +354,7 @@ if (import.meta.vitest) {
 
     test('add inverted interval panics', () => {
       const a = new ActiveIntervalsOrderedByEndpoint<string>();
-      expect(() => a.add([[5, 3], 'bad'])).toThrowError('Interval start must be <= end');
+  expect(() => a.add([r(5, 3), 'bad'])).toThrowError('Interval start must be <= end');
     });
   });
 
@@ -464,14 +386,14 @@ if (import.meta.vitest) {
       const Same = 'Same' as const;
 
       const syntaxHighlighting: Array<Interval<'Blue' | 'Yellow'>> = [
-        [[0, 3], Blue],
-        [[5, 8], Yellow],
-        [[10, 13], Blue],
+        [r(0, 3), Blue],
+        [r(5, 8), Yellow],
+        [r(10, 13), Blue],
       ];
       const diffs: Array<Interval<'Changed' | 'Same'>> = [
-        [[0, 2], Same],
-        [[2, 10], Changed],
-        [[10, 15], Same],
+        [r(0, 2), Same],
+        [r(2, 10), Changed],
+        [r(10, 15), Same],
       ];
 
       const merged: Array<Interval<'Blue' | 'Yellow' | 'Changed' | 'Same'>> = kmergeBy(
@@ -481,45 +403,27 @@ if (import.meta.vitest) {
       expect(merged).toMatchInlineSnapshot(`
         [
           [
-            [
-              0,
-              3,
-            ],
+            "0..3",
             "Blue",
           ],
           [
-            [
-              0,
-              2,
-            ],
+            "0..2",
             "Same",
           ],
           [
-            [
-              2,
-              10,
-            ],
+            "2..10",
             "Changed",
           ],
           [
-            [
-              5,
-              8,
-            ],
+            "5..8",
             "Yellow",
           ],
           [
-            [
-              10,
-              13,
-            ],
+            "10..13",
             "Blue",
           ],
           [
-            [
-              10,
-              15,
-            ],
+            "10..15",
             "Same",
           ],
         ]
@@ -529,68 +433,47 @@ if (import.meta.vitest) {
       expect(out).toMatchInlineSnapshot(`
         [
           [
-            [
-              0,
-              2,
-            ],
+            "0..2",
             [
               "Same",
               "Blue",
             ],
           ],
           [
-            [
-              2,
-              3,
-            ],
+            "2..3",
             [
               "Blue",
               "Changed",
             ],
           ],
           [
-            [
-              3,
-              5,
-            ],
+            "3..5",
             [
               "Changed",
             ],
           ],
           [
-            [
-              5,
-              8,
-            ],
+            "5..8",
             [
               "Yellow",
               "Changed",
             ],
           ],
           [
-            [
-              8,
-              10,
-            ],
+            "8..10",
             [
               "Changed",
             ],
           ],
           [
-            [
-              10,
-              13,
-            ],
+            "10..13",
             [
               "Blue",
               "Same",
             ],
           ],
           [
-            [
-              13,
-              15,
-            ],
+            "13..15",
             [
               "Same",
             ],
