@@ -12,6 +12,49 @@ wasm-pack build --target bundler --out-dir pkg
 
 This compiles the Rust library to WASM and generates TypeScript bindings in the `pkg/` directory.
 
+## Testing
+
+The WASM module includes comprehensive tests to ensure parity with the TypeScript implementation:
+
+```bash
+cd ts
+npm test
+```
+
+### Test Coverage
+
+The WASM module passes all 43 tests including:
+
+**Basic functionality (3 tests)**
+- Empty input handling
+- Single intervals (empty and non-empty)
+
+**Edge cases (4 tests)**
+- Multiple intervals with same start point
+- Identical endpoint handling
+- Unsorted input detection (panics)
+- Inverted interval detection (panics)
+
+**Rust parity tests (2 tests)**
+- Empty intervals at start points
+- Large composite examples with multiple overlaps
+
+**Additional test cases (5 tests)**
+- Overlapping intervals
+- Adjacent non-overlapping intervals
+- Completely disjoint intervals
+- Nested intervals
+- Multiple empty intervals at same position
+
+**Stress tests (2 tests)**
+- 100 overlapping intervals
+- Large span intervals
+
+**WASM vs TS parity (12 tests)**
+- Comprehensive comparison ensuring WASM and TS produce identical results for all test cases
+
+All tests confirm that the WASM implementation produces **exactly the same output** as the TypeScript implementation for all inputs.
+
 ## API
 
 The WASM module exposes the following function:
