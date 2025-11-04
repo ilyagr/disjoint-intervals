@@ -299,6 +299,198 @@ if (import.meta.vitest) {
     });
   });
 
+  describe('Parity with Rust tests', () => {
+  test('handling of empty intervals at start points', () => {
+      const input = [
+        i(0, 5),
+        i(4, 6),
+        i(5, 5),
+        i(5, 7),
+        i(7, 7),
+        i(10, 10),
+        i(10, 11),
+      ];
+      const out = collect(SplitIntoDisjointRanges.fromSortedIntervals(input));
+      const normalized = out.map(([range, labels]) => [range, labels.slice().sort((a, b) => `${a}`.localeCompare(`${b}`))] as const);
+      expect(normalized).toMatchInlineSnapshot(`
+        [
+          [
+            "0..4",
+            [
+              "0..5",
+            ],
+          ],
+          [
+            "4..5",
+            [
+              "0..5",
+              "4..6",
+            ],
+          ],
+          [
+            "5..5",
+            [
+              "4..6",
+              "5..5",
+              "5..7",
+            ],
+          ],
+          [
+            "5..6",
+            [
+              "4..6",
+              "5..7",
+            ],
+          ],
+          [
+            "6..7",
+            [
+              "5..7",
+            ],
+          ],
+          [
+            "7..7",
+            [
+              "7..7",
+            ],
+          ],
+          [
+            "10..10",
+            [
+              "10..10",
+              "10..11",
+            ],
+          ],
+          [
+            "10..11",
+            [
+              "10..11",
+            ],
+          ],
+        ]
+      `);
+    });
+
+  test('larger composite example', () => {
+      const input = [
+        i(0, 5),
+        i(2, 2),
+        i(3, 8),
+        i(8, 9),
+        i(8, 8),
+        i(10, 15),
+        i(12, 20),
+        i(20, 25),
+        i(22, 30),
+        i(23, 35),
+      ];
+      const out = collect(SplitIntoDisjointRanges.fromSortedIntervals(input));
+      const normalized = out.map(([range, labels]) => [range, labels.slice().sort((a, b) => `${a}`.localeCompare(`${b}`))] as const);
+      expect(normalized).toMatchInlineSnapshot(`
+        [
+          [
+            "0..2",
+            [
+              "0..5",
+            ],
+          ],
+          [
+            "2..2",
+            [
+              "0..5",
+              "2..2",
+            ],
+          ],
+          [
+            "2..3",
+            [
+              "0..5",
+            ],
+          ],
+          [
+            "3..5",
+            [
+              "0..5",
+              "3..8",
+            ],
+          ],
+          [
+            "5..8",
+            [
+              "3..8",
+            ],
+          ],
+          [
+            "8..8",
+            [
+              "8..8",
+              "8..9",
+            ],
+          ],
+          [
+            "8..9",
+            [
+              "8..9",
+            ],
+          ],
+          [
+            "10..12",
+            [
+              "10..15",
+            ],
+          ],
+          [
+            "12..15",
+            [
+              "10..15",
+              "12..20",
+            ],
+          ],
+          [
+            "15..20",
+            [
+              "12..20",
+            ],
+          ],
+          [
+            "20..22",
+            [
+              "20..25",
+            ],
+          ],
+          [
+            "22..23",
+            [
+              "20..25",
+              "22..30",
+            ],
+          ],
+          [
+            "23..25",
+            [
+              "20..25",
+              "22..30",
+              "23..35",
+            ],
+          ],
+          [
+            "25..30",
+            [
+              "22..30",
+              "23..35",
+            ],
+          ],
+          [
+            "30..35",
+            [
+              "23..35",
+            ],
+          ],
+        ]
+      `);
+    });
+  });
+
   describe('ActiveIntervalsOrderedByEndpoint behavior', () => {
     test('nextEnd and isEmpty lifecycle', () => {
       const a = new ActiveIntervalsOrderedByEndpoint<string>();
