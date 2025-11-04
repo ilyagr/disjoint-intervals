@@ -1,1 +1,19 @@
 /target
+
+# Node / TypeScript
+node_modules/
+dist/
+coverage/
+.tsbuildinfo
+*.tsbuildinfo
+.vite/
+.vitest/
+.eslintcache
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# OS
+.DS_Store
