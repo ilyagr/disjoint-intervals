@@ -27,31 +27,34 @@ fn gen_same_start(m: usize, start: usize, include_empty: bool) -> Vec<Interval<u
 
 fn measure_memory(name: &str, input: Vec<Interval<usize, u32>>) {
     let input_len = input.len();
-    
+
     // Approximate memory by measuring structure sizes
     let input_bytes = input_len * mem::size_of::<Interval<usize, u32>>();
-    
+
     let out: Vec<_> = SplitIntoDisjointRanges::from_sorted_intervals(input.into_iter()).collect();
     let output_len = out.len();
-    
+
     // Each output is (Range<usize>, Vec<u32>)
     // For "many same start", Vec<u32> grows significantly
     let mut output_bytes = output_len * mem::size_of::<(std::ops::Range<usize>, Vec<u32>)>();
-    
+
     // Add heap allocations for Vec<u32> contents
     for (_, labels) in &out {
         output_bytes += labels.len() * mem::size_of::<u32>();
         output_bytes += labels.capacity() * mem::size_of::<u32>();
     }
-    
+
     let total_mb = (input_bytes + output_bytes) as f64 / 1024.0 / 1024.0;
-    
+
     println!("{}:", name);
     println!("  Input intervals: {}", input_len);
     println!("  Output segments: {}", output_len);
     println!("  Approx total memory: {:.2} MB", total_mb);
-    println!("  Per input interval: {:.2} KB", (total_mb * 1024.0) / input_len as f64);
-    
+    println!(
+        "  Per input interval: {:.2} KB",
+        (total_mb * 1024.0) / input_len as f64
+    );
+
     // Show max active labels for "many same start" case
     if let Some(max_labels) = out.iter().map(|(_, labels)| labels.len()).max() {
         println!("  Max labels in one segment: {}", max_labels);
