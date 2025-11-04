@@ -167,3 +167,30 @@ pub fn disjoint_intervals_obj(input: &JsValue) -> Array {
     }
     out
 }
+
+/// High-performance version using TypedArrays.
+/// Input: Uint32Array with pairs [start0, end0, start1, end1, ...]
+/// Output: Uint32Array with pairs [start0, end0, start1, end1, ...]
+///
+/// This avoids the overhead of Reflect::get/set and object creation.
+/// Intervals must be sorted by start point.
+#[wasm_bindgen]
+pub fn disjoint_intervals_u32(input: &[u32]) -> Vec<u32> {
+    // Parse input: pairs of (start, end)
+    let mut intervals = Vec::with_capacity(input.len() / 2);
+    for chunk in input.chunks_exact(2) {
+        intervals.push((chunk[0]..chunk[1], ()));
+    }
+
+    // Process intervals
+    let result = SplitIntoDisjointRanges::from_sorted_intervals(intervals.into_iter());
+
+    // Output as flat array: [start0, end0, start1, end1, ...]
+    let mut output = Vec::new();
+    for (range, _labels) in result {
+        output.push(range.start);
+        output.push(range.end);
+    }
+
+    output
+}
