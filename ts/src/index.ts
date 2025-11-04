@@ -41,6 +41,8 @@ export const startPointBefore = <Ix, Label>(ops: IxOps<Ix>) =>
 
 export class ActiveIntervalsOrderedByEndpoint<Ix, Label> {
   private heap: Heap<Ix>;
+  // Map maintains insertion order (like Rust's IndexMap). Since we only insert
+  // new endpoints in heap order (ascending), iteration order = ascending endpoint order.
   private map: Map<string, { ix: Ix; intervals: Array<Interval<Ix, Label>> }>;
 
   constructor(private ops: IxOps<Ix>) {
@@ -80,11 +82,11 @@ export class ActiveIntervalsOrderedByEndpoint<Ix, Label> {
   }
 
   allLabels(): Label[] {
-    // iterate ends in ascending order, preserve insertion order within same end
-    const buckets = Array.from(this.map.values()).sort((a, b) => this.ops.compare(a.ix, b.ix));
+    // Map iteration order = insertion order = ascending endpoint order
+    // (because we only insert new endpoints in heap-pop order, which is ascending)
     const out: Label[] = [];
-    for (const b of buckets) {
-      for (const [, label] of b.intervals) out.push(label);
+    for (const bucket of this.map.values()) {
+      for (const [, label] of bucket.intervals) out.push(label);
     }
     return out;
   }
@@ -242,17 +244,17 @@ if (import.meta.vitest) {
             "5..5",
             [
               "5..5",
-              "5..6",
               "5..7",
               "5..10",
+              "5..6",
             ],
           ],
           [
             "5..6",
             [
-              "5..6",
               "5..7",
               "5..10",
+              "5..6",
             ],
           ],
           [
@@ -652,8 +654,8 @@ if (import.meta.vitest) {
           [
             "0..2",
             [
-              "Same",
               "Blue",
+              "Same",
             ],
           ],
           [
@@ -672,8 +674,8 @@ if (import.meta.vitest) {
           [
             "5..8",
             [
-              "Yellow",
               "Changed",
+              "Yellow",
             ],
           ],
           [
