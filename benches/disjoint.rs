@@ -31,6 +31,31 @@ fn gen_same_start(m: usize, start: usize, include_empty: bool) -> Vec<Interval<u
     v
 }
 
+// u32 versions for fair comparison with WASM
+fn gen_dense_u32(n: u32, width: u32) -> Vec<Interval<u32, ()>> {
+    (0..n).map(|i| ((i..i + width), ())).collect()
+}
+
+fn gen_sparse_u32(n: u32, gap: u32, width: u32) -> Vec<Interval<u32, ()>> {
+    (0..n)
+        .map(|i| {
+            let s = i * (gap + width);
+            ((s..s + width), ())
+        })
+        .collect()
+}
+
+fn gen_same_start_u32(m: u32, start: u32, include_empty: bool) -> Vec<Interval<u32, ()>> {
+    let mut v: Vec<Interval<u32, ()>> = Vec::with_capacity(m as usize + include_empty as usize);
+    if include_empty {
+        v.push(((start..start), ()));
+    }
+    for i in 1..=m {
+        v.push(((start..start + i), ()));
+    }
+    v
+}
+
 fn bench_dense(c: &mut Criterion) {
     let data = gen_dense(10_000, 100);
     c.bench_function("disjoint_dense_10k_w100", |b| {
@@ -76,5 +101,105 @@ fn bench_same_start(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, bench_dense, bench_sparse, bench_same_start);
+// Benchmarks without cloning (algorithm only)
+fn bench_dense_no_clone(c: &mut Criterion) {
+    c.bench_function("disjoint_dense_10k_w100_no_clone", |b| {
+        b.iter_batched(
+            || gen_dense(10_000, 100),
+            |d| {
+                let out: Vec<_> =
+                    SplitIntoDisjointRanges::from_sorted_intervals(d.into_iter()).collect();
+                black_box(out);
+            },
+            BatchSize::SmallInput,
+        )
+    });
+}
+
+fn bench_sparse_no_clone(c: &mut Criterion) {
+    c.bench_function("disjoint_sparse_10k_gap200_w50_no_clone", |b| {
+        b.iter_batched(
+            || gen_sparse(10_000, 200, 50),
+            |d| {
+                let out: Vec<_> =
+                    SplitIntoDisjointRanges::from_sorted_intervals(d.into_iter()).collect();
+                black_box(out);
+            },
+            BatchSize::SmallInput,
+        )
+    });
+}
+
+fn bench_same_start_no_clone(c: &mut Criterion) {
+    c.bench_function("disjoint_many_same_start_10k_no_clone", |b| {
+        b.iter_batched(
+            || gen_same_start(10_000, 1_000_000, true),
+            |d| {
+                let out: Vec<_> =
+                    SplitIntoDisjointRanges::from_sorted_intervals(d.into_iter()).collect();
+                black_box(out);
+            },
+            BatchSize::SmallInput,
+        )
+    });
+}
+
+// u32 benchmarks (like WASM)
+fn bench_dense_u32(c: &mut Criterion) {
+    let data = gen_dense_u32(10_000, 100);
+    c.bench_function("disjoint_dense_10k_w100_u32", |b| {
+        b.iter_batched(
+            || data.clone(),
+            |d| {
+                let out: Vec<_> =
+                    SplitIntoDisjointRanges::from_sorted_intervals(d.into_iter()).collect();
+                black_box(out);
+            },
+            BatchSize::SmallInput,
+        )
+    });
+}
+
+fn bench_sparse_u32(c: &mut Criterion) {
+    let data = gen_sparse_u32(10_000, 200, 50);
+    c.bench_function("disjoint_sparse_10k_gap200_w50_u32", |b| {
+        b.iter_batched(
+            || data.clone(),
+            |d| {
+                let out: Vec<_> =
+                    SplitIntoDisjointRanges::from_sorted_intervals(d.into_iter()).collect();
+                black_box(out);
+            },
+            BatchSize::SmallInput,
+        )
+    });
+}
+
+fn bench_same_start_u32(c: &mut Criterion) {
+    let data = gen_same_start_u32(10_000, 1_000_000, true);
+    c.bench_function("disjoint_many_same_start_10k_u32", |b| {
+        b.iter_batched(
+            || data.clone(),
+            |d| {
+                let out: Vec<_> =
+                    SplitIntoDisjointRanges::from_sorted_intervals(d.into_iter()).collect();
+                black_box(out);
+            },
+            BatchSize::SmallInput,
+        )
+    });
+}
+
+criterion_group!(
+    benches,
+    bench_dense,
+    bench_sparse,
+    bench_same_start,
+    bench_dense_no_clone,
+    bench_sparse_no_clone,
+    bench_same_start_no_clone,
+    bench_dense_u32,
+    bench_sparse_u32,
+    bench_same_start_u32
+);
 criterion_main!(benches);

@@ -21,6 +21,11 @@ const dense = genDense(10_000, 100);
 const sparse = genSparse(10_000, 200, 50);
 const sameStart = genSameStart(10_000, 1_000_000, true);
 
+// Pre-convert to TypedArrays for fair comparison (like Rust's iter_batched setup)
+const denseTyped = intervalsToTypedArray(dense);
+const sparseTyped = intervalsToTypedArray(sparse);
+const sameStartTyped = intervalsToTypedArray(sameStart);
+
 describe('wasm disjoint-intervals benches (Object API)', () => {
   bench('wasm_disjoint_dense_10k_w100', () => {
     const input = intervalsToObjects(dense.slice());
@@ -43,20 +48,39 @@ describe('wasm disjoint-intervals benches (Object API)', () => {
 
 describe('wasm disjoint-intervals benches (TypedArray API)', () => {
   bench('wasm_u32_disjoint_dense_10k_w100', () => {
-    const input = intervalsToTypedArray(dense.slice());
+    // Slice to copy the array (like Rust's clone)
+    const input = denseTyped.slice();
     const out = wasm.disjoint_intervals_u32(input);
     if (out.length === 0 && dense.length > 0) throw new Error('unreachable');
   });
 
   bench('wasm_u32_disjoint_sparse_10k_gap200_w50', () => {
-    const input = intervalsToTypedArray(sparse.slice());
+    const input = sparseTyped.slice();
     const out = wasm.disjoint_intervals_u32(input);
     if (out.length === 0 && sparse.length > 0) throw new Error('unreachable');
   });
 
   bench('wasm_u32_disjoint_many_same_start_10k', () => {
-    const input = intervalsToTypedArray(sameStart.slice());
+    const input = sameStartTyped.slice();
     const out = wasm.disjoint_intervals_u32(input);
+    if (out.length === 0 && sameStart.length > 0) throw new Error('unreachable');
+  });
+});
+
+describe('wasm disjoint-intervals benches (TypedArray API - no copy)', () => {
+  bench('wasm_u32_nocopy_disjoint_dense_10k_w100', () => {
+    // Don't copy - pass the same buffer each time (WASM will copy internally)
+    const out = wasm.disjoint_intervals_u32(denseTyped);
+    if (out.length === 0 && dense.length > 0) throw new Error('unreachable');
+  });
+
+  bench('wasm_u32_nocopy_disjoint_sparse_10k_gap200_w50', () => {
+    const out = wasm.disjoint_intervals_u32(sparseTyped);
+    if (out.length === 0 && sparse.length > 0) throw new Error('unreachable');
+  });
+
+  bench('wasm_u32_nocopy_disjoint_many_same_start_10k', () => {
+    const out = wasm.disjoint_intervals_u32(sameStartTyped);
     if (out.length === 0 && sameStart.length > 0) throw new Error('unreachable');
   });
 });
