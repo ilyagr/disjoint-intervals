@@ -1,3 +1,4 @@
+pub mod wasm;
 use indexmap::IndexMap;
 use std::{
     cmp::{Reverse, min},

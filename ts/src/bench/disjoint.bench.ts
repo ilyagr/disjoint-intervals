@@ -3,7 +3,7 @@ import { SplitIntoDisjointRanges, Range, numberOps, type Interval } from '../ind
 
 const r = (start: number, end: number) => new Range<number>(start, end, numberOps.show);
 
-function genDense(n: number, width: number): Array<Interval<number, number>> {
+export function genDense(n: number, width: number): Array<Interval<number, number>> {
   // Overlapping windows: (i..i+width) for i in 0..n-1
   // Already sorted by start.
   const out: Array<Interval<number, number>> = new Array(n);
@@ -11,7 +11,7 @@ function genDense(n: number, width: number): Array<Interval<number, number>> {
   return out;
 }
 
-function genSparse(n: number, gap: number, width: number): Array<Interval<number, number>> {
+export function genSparse(n: number, gap: number, width: number): Array<Interval<number, number>> {
   // Non-overlapping windows spaced by gap: (s..s+width)
   // Already sorted by start.
   const out: Array<Interval<number, number>> = new Array(n);
@@ -22,7 +22,7 @@ function genSparse(n: number, gap: number, width: number): Array<Interval<number
   return out;
 }
 
-function genSameStart(m: number, start: number, includeEmpty: boolean): Array<Interval<number, number>> {
+export function genSameStart(m: number, start: number, includeEmpty: boolean): Array<Interval<number, number>> {
   // Many intervals sharing the same start point with various ends.
   // Optionally include an empty interval at `start..start`.
   const out: Array<Interval<number, number>> = [];

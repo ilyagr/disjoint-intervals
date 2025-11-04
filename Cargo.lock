@@ -186,6 +186,8 @@ dependencies = [
  "indexmap",
  "insta",
  "itertools 0.14.0",
+ "js-sys",
+ "wasm-bindgen",
 ]
 
 [[package]]
