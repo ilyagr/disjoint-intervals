@@ -41,6 +41,91 @@ export const startPointBefore =
   (a: Interval<Ix, Label>, b: Interval<Ix, Label>): boolean =>
     ops.compare(a[0].start, b[0].start) < 0;
 
+// ----- Multiset stuff -----
+export type Multiset<Label> = Map<Label, number>;
+
+/// Returns the old count for the label
+function multiset_add<Label>(ms: Multiset<Label>, label: Label): number {
+  const existing = ms.get(label) || 0;
+  ms.set(label, existing + 1);
+  return existing;
+}
+
+/// Returns true if the label was present
+function multiset_remove<Label>(ms: Multiset<Label>, label: Label): boolean {
+  const existing = ms.get(label) || 0;
+  if (existing > 1) {
+    ms.set(label, existing - 1);
+    return true;
+  } else {
+    ms.delete(label);
+    return existing > 0;
+  }
+}
+
+function multiset_allLabels<Label>(ms: Multiset<Label>): Label[] {
+  const out: Label[] = [];
+  for (const [label, count] of ms.entries()) {
+    for (let i = 0; i < count; i++) {
+      out.push(label);
+    }
+  }
+  return out;
+}
+
+export function intoDisjointIntervals<Ix, Label>(
+  intervals: Array<Interval<Ix, Label>>,
+  ops: IxOps<Ix> = numberOps as unknown as IxOps<Ix>
+): Array<Interval<Ix, Multiset<Label>>> {
+  const endpoints = sortedEndpoints(intervals, ops);
+
+  const result = new Array<Interval<Ix, Multiset<Label>>>();
+  const active: Multiset<Label> = new Map<Label, number>();
+  let lastPosition: Ix | null = null;
+
+  for (const { position, kind, label } of endpoints) {
+    if (active.size != 0) {
+      if (lastPosition === null || ops.compare(lastPosition as Ix, position) < 0) {
+        throw new Error("Unreachable: endpoints should be sorted, and lastPosition set before anything is inserted into the active set");
+      }
+      result.push([new Range(lastPosition, position, ops.show), new Map(active)]);
+    }
+    lastPosition = position;
+    if (kind === "start") {
+      multiset_add(active, label);
+    } else {
+      multiset_remove(active, label);
+    }
+  }
+
+  return result;
+}
+
+type Endpoint<Ix, Label> = {
+  position: Ix;
+  kind: "start" | "end";
+  label: Label;
+};
+
+function sortedEndpoints<Ix, Label>(
+  intervals: Array<Interval<Ix, Label>>,
+  ops: IxOps<Ix> = numberOps as unknown as IxOps<Ix>
+): Array<Endpoint<Ix, Label>> {
+  const eps: Array<Endpoint<Ix, Label>> = [];
+  for (const [range, label] of intervals) {
+    eps.push({ position: range.start, kind: "start", label });
+    eps.push({ position: range.end, kind: "end", label });
+  }
+  eps.sort((a, b) => {
+    const cmp = ops.compare(a.position, b.position);
+    if (cmp !== 0) return cmp;
+    // For equal positions, 'end' comes before 'start' to handle empty intervals correctly
+    if (a.kind === b.kind) return 0;
+    return a.kind === "end" ? -1 : 1;
+  });
+  return eps;
+}
+
 // ---- K-way merge utilities ----
 
 /**
