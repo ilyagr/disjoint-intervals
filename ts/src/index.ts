@@ -39,6 +39,82 @@ export type Interval<Ix, Label> = [Range<Ix>, Label];
 export const startPointBefore = <Ix, Label>(ops: IxOps<Ix>) =>
   (a: Interval<Ix, Label>, b: Interval<Ix, Label>): boolean => ops.compare(a[0].start, b[0].start) < 0;
 
+// ---- K-way merge utilities ----
+
+/**
+ * Merge multiple sorted lists of intervals into a single sorted list.
+ * Uses a k-way merge algorithm with a min-heap for efficiency.
+ * 
+ * @param lists - Array of sorted interval lists to merge
+ * @param less - Comparison function that returns true if first interval should come before second
+ * @returns A single merged sorted list
+ * 
+ * @example
+ * ```typescript
+ * const list1 = [[r(0, 3), 'a'], [r(5, 8), 'b']];
+ * const list2 = [[r(2, 4), 'c'], [r(6, 9), 'd']];
+ * const merged = kmergeBy([list1, list2], startPointBefore(numberOps));
+ * ```
+ */
+export function kmergeBy<Ix, L>(
+  lists: Array<Array<Interval<Ix, L>>>,
+  less: (a: Interval<Ix, L>, b: Interval<Ix, L>) => boolean,
+): Array<Interval<Ix, L>> {
+  type Node = { value: Interval<Ix, L>; idx: number; list: number };
+  
+  // Min-heap that uses the comparison function, breaking ties by list index for stability
+  const heap = new Heap<Node>((a, b) => 
+    less(a.value, b.value) ? -1 : 
+    less(b.value, a.value) ? 1 : 
+    a.list - b.list
+  );
+  
+  // Initialize heap with the first element from each non-empty list
+  for (let li = 0; li < lists.length; li++) {
+    if (lists[li].length > 0) {
+      heap.push({ value: lists[li][0], idx: 0, list: li });
+    }
+  }
+  
+  const out: Array<Interval<Ix, L>> = [];
+  
+  // Extract minimum element and add next element from same list
+  while (!heap.isEmpty()) {
+    const { value, idx, list } = heap.pop()!;
+    out.push(value);
+    
+    const nextIdx = idx + 1;
+    if (nextIdx < lists[list].length) {
+      heap.push({ value: lists[list][nextIdx], idx: nextIdx, list });
+    }
+  }
+  
+  return out;
+}
+
+/**
+ * Merge multiple sorted lists of intervals by their start points.
+ * Convenience wrapper around kmergeBy using startPointBefore.
+ * 
+ * @param lists - Array of sorted interval lists to merge (sorted by start point)
+ * @param ops - Index operations for comparison (defaults to numberOps)
+ * @returns A single merged sorted list
+ * 
+ * @example
+ * ```typescript
+ * const list1 = [[r(0, 3), 'a'], [r(5, 8), 'b']];
+ * const list2 = [[r(2, 4), 'c'], [r(6, 9), 'd']];
+ * const merged = kmerge([list1, list2]);
+ * // Result: [[r(0,3),'a'], [r(2,4),'c'], [r(5,8),'b'], [r(6,9),'d']]
+ * ```
+ */
+export function kmerge<Ix, L>(
+  lists: Array<Array<Interval<Ix, L>>>,
+  ops: IxOps<Ix> = numberOps as unknown as IxOps<Ix>,
+): Array<Interval<Ix, L>> {
+  return kmergeBy(lists, startPointBefore<Ix, L>(ops));
+}
+
 export class ActiveIntervalsOrderedByEndpoint<Ix, Label> {
   private heap: Heap<Ix>;
   // Map maintains insertion order (like Rust's IndexMap). Since we only insert
@@ -577,27 +653,207 @@ if (import.meta.vitest) {
     });
   });
 
-  describe('Multiple annotations with k-merge', () => {
-    const kmergeBy = <Ix, L>(
-      lists: Array<Array<Interval<Ix, L>>>,
-      less: (a: Interval<Ix, L>, b: Interval<Ix, L>) => boolean,
-    ): Array<Interval<Ix, L>> => {
-      type Node = { value: Interval<Ix, L>; idx: number; list: number };
-      const heap = new Heap<Node>((a, b) => (less(a.value, b.value) ? -1 : less(b.value, a.value) ? 1 : a.list - b.list));
-      const heads = new Array<number>(lists.length).fill(0);
-      for (let li = 0; li < lists.length; li++) {
-        if (lists[li].length > 0) heap.push({ value: lists[li][0], idx: 0, list: li });
-      }
-      const out: Array<Interval<Ix, L>> = [];
-      while (!heap.isEmpty()) {
-        const { value, idx, list } = heap.pop()!;
-        out.push(value);
-        const nextIdx = idx + 1;
-        if (nextIdx < lists[list].length) heap.push({ value: lists[list][nextIdx], idx: nextIdx, list });
-      }
-      return out;
-    };
+  describe('K-way merge utilities', () => {
+    test('kmerge with empty input', () => {
+      const result = kmerge<number, string>([]);
+      expect(result).toEqual([]);
+    });
 
+    test('kmerge with single list', () => {
+      const list = [i(0, 3), i(5, 8)];
+      const result = kmerge([list]);
+      expect(result).toEqual(list);
+    });
+
+    test('kmerge with two lists', () => {
+      const list1 = [i(0, 3), i(5, 8), i(10, 13)];
+      const list2 = [i(2, 4), i(6, 9), i(11, 14)];
+      const result = kmerge([list1, list2]);
+      
+      expect(result).toMatchInlineSnapshot(`
+        [
+          [
+            "0..3",
+            "0..3",
+          ],
+          [
+            "2..4",
+            "2..4",
+          ],
+          [
+            "5..8",
+            "5..8",
+          ],
+          [
+            "6..9",
+            "6..9",
+          ],
+          [
+            "10..13",
+            "10..13",
+          ],
+          [
+            "11..14",
+            "11..14",
+          ],
+        ]
+      `);
+    });
+
+    test('kmerge with three lists', () => {
+      const list1 = [i(0, 2), i(6, 8)];
+      const list2 = [i(1, 3), i(7, 9)];
+      const list3 = [i(4, 5), i(10, 12)];
+      const result = kmerge([list1, list2, list3]);
+      
+      expect(result).toMatchInlineSnapshot(`
+        [
+          [
+            "0..2",
+            "0..2",
+          ],
+          [
+            "1..3",
+            "1..3",
+          ],
+          [
+            "4..5",
+            "4..5",
+          ],
+          [
+            "6..8",
+            "6..8",
+          ],
+          [
+            "7..9",
+            "7..9",
+          ],
+          [
+            "10..12",
+            "10..12",
+          ],
+        ]
+      `);
+    });
+
+    test('kmerge maintains stability for equal start points', () => {
+      const list1 = [i(5, 10), i(5, 15)];
+      const list2 = [i(5, 8), i(5, 12)];
+      const result = kmerge([list1, list2]);
+      
+      // When start points are equal, original list order should be preserved (list1 before list2)
+      expect(result.map(([range]) => range.toString())).toEqual([
+        '5..10', '5..15', '5..8', '5..12'
+      ]);
+    });
+
+    test('kmerge with empty lists mixed in', () => {
+      const list1 = [i(0, 3)];
+      const list2: Interval<number, Range<number>>[] = [];
+      const list3 = [i(2, 5)];
+      const result = kmerge([list1, list2, list3]);
+      
+      expect(result).toMatchInlineSnapshot(`
+        [
+          [
+            "0..3",
+            "0..3",
+          ],
+          [
+            "2..5",
+            "2..5",
+          ],
+        ]
+      `);
+    });
+
+    test('kmerge with different label types', () => {
+      const list1: Array<Interval<number, string>> = [
+        [r(0, 3), 'a'],
+        [r(5, 8), 'b'],
+      ];
+      const list2: Array<Interval<number, string>> = [
+        [r(2, 4), 'c'],
+        [r(6, 9), 'd'],
+      ];
+      const result = kmerge([list1, list2]);
+      
+      expect(result).toMatchInlineSnapshot(`
+        [
+          [
+            "0..3",
+            "a",
+          ],
+          [
+            "2..4",
+            "c",
+          ],
+          [
+            "5..8",
+            "b",
+          ],
+          [
+            "6..9",
+            "d",
+          ],
+        ]
+      `);
+    });
+
+    test('kmergeBy with custom comparator', () => {
+      // Merge by end point instead of start point
+      const byEndPoint = <L>(a: Interval<number, L>, b: Interval<number, L>) => 
+        a[0].end < b[0].end;
+      
+      const list1 = [i(0, 3), i(5, 10)];
+      const list2 = [i(2, 7), i(8, 12)];
+      const result = kmergeBy([list1, list2], byEndPoint);
+      
+      // Should be sorted by end point: 3, 7, 10, 12
+      expect(result.map(([range]) => range.toString())).toEqual([
+        '0..3', '2..7', '5..10', '8..12'
+      ]);
+    });
+
+    test('kmerge with tuple indices', () => {
+      const pr = (s: [number, number], e: [number, number]) => 
+        new Range<[number, number]>(s, e, tuple2NumberOps.show);
+      
+      const list1: Array<Interval<[number, number], string>> = [
+        [pr([1, 1], [1, 3]), 'A'],
+        [pr([2, 1], [2, 3]), 'B'],
+      ];
+      const list2: Array<Interval<[number, number], string>> = [
+        [pr([1, 2], [1, 4]), 'C'],
+        [pr([3, 1], [3, 3]), 'D'],
+      ];
+      
+      const result = kmerge([list1, list2], tuple2NumberOps);
+      
+      expect(result).toMatchInlineSnapshot(`
+        [
+          [
+            "(1,1)..(1,3)",
+            "A",
+          ],
+          [
+            "(1,2)..(1,4)",
+            "C",
+          ],
+          [
+            "(2,1)..(2,3)",
+            "B",
+          ],
+          [
+            "(3,1)..(3,3)",
+            "D",
+          ],
+        ]
+      `);
+    });
+  });
+
+  describe('Multiple annotations with k-merge', () => {
     test('merge and split', () => {
       const Blue = 'Blue' as const;
       const Yellow = 'Yellow' as const;
@@ -615,9 +871,8 @@ if (import.meta.vitest) {
         [r(10, 15), Same],
       ];
 
-      const merged: Array<Interval<number, 'Blue' | 'Yellow' | 'Changed' | 'Same'>> = kmergeBy(
+      const merged: Array<Interval<number, 'Blue' | 'Yellow' | 'Changed' | 'Same'>> = kmerge(
         [syntaxHighlighting, diffs],
-        startPointBefore<number, 'Blue' | 'Yellow' | 'Changed' | 'Same'>(numberOps),
       );
       expect(merged).toMatchInlineSnapshot(`
         [
