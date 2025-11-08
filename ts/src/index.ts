@@ -77,13 +77,15 @@ export function intoDisjointIntervals<Ix, Label>(
   intervals: Array<Interval<Ix, Label>>,
   ops: IxOps<Ix> = numberOps as unknown as IxOps<Ix>
 ): Array<Interval<Ix, Multiset<Label>>> {
-  const endpoints = sortedEndpoints(intervals, ops);
+  const ends = endpoints(intervals, ops);
+
+  ends.sort((a, b) => endpointOrder(a, b, ops));
 
   const result = new Array<Interval<Ix, Multiset<Label>>>();
   const active: Multiset<Label> = new Map<Label, number>();
   let lastPosition: Ix | null = null;
 
-  for (const { position, kind, label } of endpoints) {
+  for (const { position, kind, label } of ends) {
     if (active.size != 0) {
       if (lastPosition === null || ops.compare(lastPosition as Ix, position) > 0) {
         throw new Error("Unreachable: endpoints should be sorted, and lastPosition set before anything is inserted into the active set");
@@ -107,22 +109,23 @@ type Endpoint<Ix, Label> = {
   label: Label;
 };
 
-function sortedEndpoints<Ix, Label>(
+function endpointOrder<Ix, Label>(a: Endpoint<Ix, Label>, b: Endpoint<Ix, Label>, ops: IxOps<Ix>): number {
+    const cmp = ops.compare(a.position, b.position);
+    if (cmp !== 0) return cmp;
+    // For equal positions, 'end' comes before 'start' to handle empty intervals correctly
+    if (a.kind === b.kind) return 0;
+    return a.kind === "end" ? -1 : 1;
+}
+  
+function endpoints<Ix, Label>(
   intervals: Array<Interval<Ix, Label>>,
-  ops: IxOps<Ix> = numberOps as unknown as IxOps<Ix>
+  ops: IxOps<Ix>
 ): Array<Endpoint<Ix, Label>> {
   const eps: Array<Endpoint<Ix, Label>> = [];
   for (const [range, label] of intervals) {
     eps.push({ position: range.start, kind: "start", label });
     eps.push({ position: range.end, kind: "end", label });
   }
-  eps.sort((a, b) => {
-    const cmp = ops.compare(a.position, b.position);
-    if (cmp !== 0) return cmp;
-    // For equal positions, 'end' comes before 'start' to handle empty intervals correctly
-    if (a.kind === b.kind) return 0;
-    return a.kind === "end" ? -1 : 1;
-  });
   return eps;
 }
 
