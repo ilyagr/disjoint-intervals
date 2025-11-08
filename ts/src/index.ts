@@ -1,4 +1,4 @@
-import { Heap } from 'heap-js';
+import { Heap } from "heap-js";
 
 // ---- Generic index support ----
 export type Comparator<Ix> = (a: Ix, b: Ix) => number;
@@ -18,7 +18,7 @@ export const numberOps: IxOps<number> = {
 };
 
 export const tuple2NumberOps: IxOps<[number, number]> = {
-  compare: (a, b) => (a[0] - b[0]) || (a[1] - b[1]),
+  compare: (a, b) => a[0] - b[0] || a[1] - b[1],
   keyOf: (ix) => `${ix[0]}:${ix[1]}`,
   show: (ix) => `(${ix[0]},${ix[1]})`,
 };
@@ -36,19 +36,21 @@ export class Range<Ix> {
 
 export type Interval<Ix, Label> = [Range<Ix>, Label];
 
-export const startPointBefore = <Ix, Label>(ops: IxOps<Ix>) =>
-  (a: Interval<Ix, Label>, b: Interval<Ix, Label>): boolean => ops.compare(a[0].start, b[0].start) < 0;
+export const startPointBefore =
+  <Ix, Label>(ops: IxOps<Ix>) =>
+  (a: Interval<Ix, Label>, b: Interval<Ix, Label>): boolean =>
+    ops.compare(a[0].start, b[0].start) < 0;
 
 // ---- K-way merge utilities ----
 
 /**
  * Merge multiple sorted lists of intervals into a single sorted list.
  * Uses a k-way merge algorithm with a min-heap for efficiency.
- * 
+ *
  * @param lists - Array of sorted interval lists to merge
  * @param less - Comparison function that returns true if first interval should come before second
  * @returns A single merged sorted list
- * 
+ *
  * @example
  * ```typescript
  * const list1 = [[r(0, 3), 'a'], [r(5, 8), 'b']];
@@ -58,48 +60,46 @@ export const startPointBefore = <Ix, Label>(ops: IxOps<Ix>) =>
  */
 export function kmergeBy<Ix, L>(
   lists: Array<Array<Interval<Ix, L>>>,
-  less: (a: Interval<Ix, L>, b: Interval<Ix, L>) => boolean,
+  less: (a: Interval<Ix, L>, b: Interval<Ix, L>) => boolean
 ): Array<Interval<Ix, L>> {
   type Node = { value: Interval<Ix, L>; idx: number; list: number };
-  
+
   // Min-heap that uses the comparison function, breaking ties by list index for stability
-  const heap = new Heap<Node>((a, b) => 
-    less(a.value, b.value) ? -1 : 
-    less(b.value, a.value) ? 1 : 
-    a.list - b.list
+  const heap = new Heap<Node>((a, b) =>
+    less(a.value, b.value) ? -1 : less(b.value, a.value) ? 1 : a.list - b.list
   );
-  
+
   // Initialize heap with the first element from each non-empty list
   for (let li = 0; li < lists.length; li++) {
     if (lists[li].length > 0) {
       heap.push({ value: lists[li][0], idx: 0, list: li });
     }
   }
-  
+
   const out: Array<Interval<Ix, L>> = [];
-  
+
   // Extract minimum element and add next element from same list
   while (!heap.isEmpty()) {
     const { value, idx, list } = heap.pop()!;
     out.push(value);
-    
+
     const nextIdx = idx + 1;
     if (nextIdx < lists[list].length) {
       heap.push({ value: lists[list][nextIdx], idx: nextIdx, list });
     }
   }
-  
+
   return out;
 }
 
 /**
  * Merge multiple sorted lists of intervals by their start points.
  * Convenience wrapper around kmergeBy using startPointBefore.
- * 
+ *
  * @param lists - Array of sorted interval lists to merge (sorted by start point)
  * @param ops - Index operations for comparison (defaults to numberOps)
  * @returns A single merged sorted list
- * 
+ *
  * @example
  * ```typescript
  * const list1 = [[r(0, 3), 'a'], [r(5, 8), 'b']];
@@ -110,7 +110,7 @@ export function kmergeBy<Ix, L>(
  */
 export function kmerge<Ix, L>(
   lists: Array<Array<Interval<Ix, L>>>,
-  ops: IxOps<Ix> = numberOps as unknown as IxOps<Ix>,
+  ops: IxOps<Ix> = numberOps as unknown as IxOps<Ix>
 ): Array<Interval<Ix, L>> {
   return kmergeBy(lists, startPointBefore<Ix, L>(ops));
 }
@@ -133,7 +133,8 @@ export class ActiveIntervalsOrderedByEndpoint<Ix, Label> {
 
   add(interval: Interval<Ix, Label>): void {
     const [{ start, end }] = interval;
-    if (this.ops.compare(start, end) > 0) throw new Error('Interval start must be <= end');
+    if (this.ops.compare(start, end) > 0)
+      throw new Error("Interval start must be <= end");
 
     const endKey = this.ops.keyOf(end);
     const bucket = this.map.get(endKey);
@@ -150,7 +151,10 @@ export class ActiveIntervalsOrderedByEndpoint<Ix, Label> {
   }
 
   forgetIntervalsEndingAtOrBefore(position: Ix): void {
-    while (this.heap.peek() !== undefined && this.ops.compare(this.heap.peek() as Ix, position) <= 0) {
+    while (
+      this.heap.peek() !== undefined &&
+      this.ops.compare(this.heap.peek() as Ix, position) <= 0
+    ) {
       const end = this.heap.pop();
       if (end === undefined) break;
       this.map.delete(this.ops.keyOf(end));
@@ -168,20 +172,25 @@ export class ActiveIntervalsOrderedByEndpoint<Ix, Label> {
   }
 }
 
-export class SplitIntoDisjointRanges<Ix, Label> implements Iterable<Interval<Ix, Label[]>> {
+export class SplitIntoDisjointRanges<Ix, Label>
+  implements Iterable<Interval<Ix, Label[]>>
+{
   private iter: Iterator<Interval<Ix, Label>>;
   private lookahead: IteratorResult<Interval<Ix, Label>> | null = null;
   private position: Ix | undefined = undefined;
   private active: ActiveIntervalsOrderedByEndpoint<Ix, Label>;
 
-  private constructor(sortedIntervals: Iterable<Interval<Ix, Label>>, private ops: IxOps<Ix>) {
+  private constructor(
+    sortedIntervals: Iterable<Interval<Ix, Label>>,
+    private ops: IxOps<Ix>
+  ) {
     this.iter = sortedIntervals[Symbol.iterator]();
     this.active = new ActiveIntervalsOrderedByEndpoint<Ix, Label>(ops);
   }
 
   static fromSortedIntervals<Ix, Label>(
     sortedIntervals: Iterable<Interval<Ix, Label>>,
-    ops: IxOps<Ix> = numberOps as unknown as IxOps<Ix>,
+    ops: IxOps<Ix> = numberOps as unknown as IxOps<Ix>
   ): SplitIntoDisjointRanges<Ix, Label> {
     return new SplitIntoDisjointRanges(sortedIntervals, ops);
   }
@@ -218,7 +227,7 @@ export class SplitIntoDisjointRanges<Ix, Label> implements Iterable<Interval<Ix,
             if (!nxt) break;
             const start = nxt[0].start;
             if (self.ops.compare(start, thisIntervalStart) < 0)
-              throw new Error('Input intervals were not properly sorted');
+              throw new Error("Input intervals were not properly sorted");
             if (self.ops.compare(start, thisIntervalStart) !== 0) break;
             // starts exactly at position, admit it
             const got = self.next()!;
@@ -231,7 +240,7 @@ export class SplitIntoDisjointRanges<Ix, Label> implements Iterable<Interval<Ix,
             if (!nxt) return; // completely done
             const nextStart = nxt[0].start;
             if (self.ops.compare(nextStart, thisIntervalStart) < 0)
-              throw new Error('Input intervals were not properly sorted');
+              throw new Error("Input intervals were not properly sorted");
             self.position = nextStart;
             continue; // establish and admit at the new start
           }
@@ -248,10 +257,17 @@ export class SplitIntoDisjointRanges<Ix, Label> implements Iterable<Interval<Ix,
         if (nextActiveEnd === undefined) return;
 
         let stopAt = nextActiveEnd as Ix;
-        if (nextRangeStart !== undefined && self.ops.compare(nextRangeStart, stopAt) < 0) stopAt = nextRangeStart;
+        if (
+          nextRangeStart !== undefined &&
+          self.ops.compare(nextRangeStart, stopAt) < 0
+        )
+          stopAt = nextRangeStart;
 
         const labels = self.active.allLabels();
-        const result: Interval<Ix, Label[]> = [new Range(thisIntervalStart, stopAt, self.ops.show), labels];
+        const result: Interval<Ix, Label[]> = [
+          new Range(thisIntervalStart, stopAt, self.ops.show),
+          labels,
+        ];
         yield result;
 
         self.active.forgetIntervalsEndingAtOrBefore(stopAt);
@@ -265,21 +281,27 @@ export class SplitIntoDisjointRanges<Ix, Label> implements Iterable<Interval<Ix,
 if (import.meta.vitest) {
   const { test, expect, describe } = import.meta.vitest;
 
-  const r = (start: number, end: number) => new Range<number>(start, end, numberOps.show);
-  const i = (start: number, end: number): Interval<number, Range<number>> => [r(start, end), r(start, end)];
+  const r = (start: number, end: number) =>
+    new Range<number>(start, end, numberOps.show);
+  const i = (start: number, end: number): Interval<number, Range<number>> => [
+    r(start, end),
+    r(start, end),
+  ];
 
-  function collect<Ix, Label>(iterable: Iterable<Interval<Ix, Label>>): Array<Interval<Ix, Label>> {
+  function collect<Ix, Label>(
+    iterable: Iterable<Interval<Ix, Label>>
+  ): Array<Interval<Ix, Label>> {
     return Array.from(iterable);
   }
 
-  describe('SplitIntoDisjointRanges basic', () => {
-    test('empty input', () => {
+  describe("SplitIntoDisjointRanges basic", () => {
+    test("empty input", () => {
       const input: Array<Interval<number, never>> = [];
       const out = collect(SplitIntoDisjointRanges.fromSortedIntervals(input));
       expect(out).toMatchInlineSnapshot(`[]`);
     });
 
-    test('single non-empty interval', () => {
+    test("single non-empty interval", () => {
       const input = [i(0, 5)];
       const out = collect(SplitIntoDisjointRanges.fromSortedIntervals(input));
       expect(out).toMatchInlineSnapshot(`
@@ -294,7 +316,7 @@ if (import.meta.vitest) {
       `);
     });
 
-    test('single empty interval becomes 0-length segment', () => {
+    test("single empty interval becomes 0-length segment", () => {
       const input = [i(5, 5)];
       const out = collect(SplitIntoDisjointRanges.fromSortedIntervals(input));
       expect(out).toMatchInlineSnapshot(`
@@ -310,8 +332,8 @@ if (import.meta.vitest) {
     });
   });
 
-  describe('Edge behaviors', () => {
-    test('many same start including empties', () => {
+  describe("Edge behaviors", () => {
+    test("many same start including empties", () => {
       const input = [i(5, 5), i(5, 7), i(5, 10), i(5, 6)];
       const out = collect(SplitIntoDisjointRanges.fromSortedIntervals(input));
       expect(out).toMatchInlineSnapshot(`
@@ -350,7 +372,7 @@ if (import.meta.vitest) {
       `);
     });
 
-    test('identical end points drop all at boundary', () => {
+    test("identical end points drop all at boundary", () => {
       const input = [i(0, 5), i(3, 5), i(4, 5), i(5, 8)];
       const out = collect(SplitIntoDisjointRanges.fromSortedIntervals(input));
       expect(out).toMatchInlineSnapshot(`
@@ -386,24 +408,24 @@ if (import.meta.vitest) {
       `);
     });
 
-    test('unsorted input panics', () => {
+    test("unsorted input panics", () => {
       const input = [i(2, 3), i(0, 1)];
-      expect(() => collect(SplitIntoDisjointRanges.fromSortedIntervals(input))).toThrowError(
-        'Input intervals were not properly sorted',
-      );
+      expect(() =>
+        collect(SplitIntoDisjointRanges.fromSortedIntervals(input))
+      ).toThrowError("Input intervals were not properly sorted");
     });
 
-    test('inverted interval panics', () => {
+    test("inverted interval panics", () => {
       const bad: Interval<number, Range<number>> = [r(5, 3), r(5, 3)];
       const input = [bad];
-      expect(() => collect(SplitIntoDisjointRanges.fromSortedIntervals(input))).toThrowError(
-        'Interval start must be <= end',
-      );
+      expect(() =>
+        collect(SplitIntoDisjointRanges.fromSortedIntervals(input))
+      ).toThrowError("Interval start must be <= end");
     });
   });
 
-  describe('Parity with Rust tests', () => {
-  test('handling of empty intervals at start points', () => {
+  describe("Parity with Rust tests", () => {
+    test("handling of empty intervals at start points", () => {
       const input = [
         i(0, 5),
         i(4, 6),
@@ -413,8 +435,17 @@ if (import.meta.vitest) {
         i(10, 10),
         i(10, 11),
       ];
-  const out = collect(SplitIntoDisjointRanges.fromSortedIntervals(input));
-  const normalized = out.map(([range, labels]) => [range, labels.slice().map((l) => `${l}`).sort()] as const);
+      const out = collect(SplitIntoDisjointRanges.fromSortedIntervals(input));
+      const normalized = out.map(
+        ([range, labels]) =>
+          [
+            range,
+            labels
+              .slice()
+              .map((l) => `${l}`)
+              .sort(),
+          ] as const
+      );
       expect(normalized).toMatchInlineSnapshot(`
         [
           [
@@ -474,7 +505,7 @@ if (import.meta.vitest) {
       `);
     });
 
-  test('larger composite example', () => {
+    test("larger composite example", () => {
       const input = [
         i(0, 5),
         i(2, 2),
@@ -487,8 +518,17 @@ if (import.meta.vitest) {
         i(22, 30),
         i(23, 35),
       ];
-  const out = collect(SplitIntoDisjointRanges.fromSortedIntervals(input));
-  const normalized = out.map(([range, labels]) => [range, labels.slice().map((l) => `${l}`).sort()] as const);
+      const out = collect(SplitIntoDisjointRanges.fromSortedIntervals(input));
+      const normalized = out.map(
+        ([range, labels]) =>
+          [
+            range,
+            labels
+              .slice()
+              .map((l) => `${l}`)
+              .sort(),
+          ] as const
+      );
       expect(normalized).toMatchInlineSnapshot(`
         [
           [
@@ -594,20 +634,20 @@ if (import.meta.vitest) {
     });
   });
 
-  describe('ActiveIntervalsOrderedByEndpoint behavior', () => {
-    test('nextEnd and isEmpty lifecycle', () => {
+  describe("ActiveIntervalsOrderedByEndpoint behavior", () => {
+    test("nextEnd and isEmpty lifecycle", () => {
       const a = new ActiveIntervalsOrderedByEndpoint<number, string>(numberOps);
       expect(a.isEmpty()).toBe(true);
       expect(a.nextEnd()).toBeUndefined();
 
-      a.add([r(0, 3), 'a']);
+      a.add([r(0, 3), "a"]);
       expect(a.isEmpty()).toBe(false);
       expect(a.nextEnd()).toBe(3);
 
-      a.add([r(1, 5), 'b']);
+      a.add([r(1, 5), "b"]);
       expect(a.nextEnd()).toBe(3);
 
-      a.add([r(0, 1), 'c']);
+      a.add([r(0, 1), "c"]);
       expect(a.nextEnd()).toBe(1);
 
       a.forgetIntervalsEndingAtOrBefore(1);
@@ -617,59 +657,61 @@ if (import.meta.vitest) {
       expect(a.nextEnd()).toBe(3);
     });
 
-    test('allLabels order agnostic', () => {
+    test("allLabels order agnostic", () => {
       const a = new ActiveIntervalsOrderedByEndpoint<number, string>(numberOps);
-      a.add([r(0, 3), 'a']);
-      a.add([r(1, 5), 'b']);
-      a.add([r(2, 5), 'c']);
+      a.add([r(0, 3), "a"]);
+      a.add([r(1, 5), "b"]);
+      a.add([r(2, 5), "c"]);
 
       const got1 = a.allLabels().slice().sort();
-      expect(got1).toEqual(['a', 'b', 'c']);
+      expect(got1).toEqual(["a", "b", "c"]);
 
       a.forgetIntervalsEndingAtOrBefore(3);
       const got2 = a.allLabels().slice().sort();
-      expect(got2).toEqual(['b', 'c']);
+      expect(got2).toEqual(["b", "c"]);
     });
 
-    test('forget removes all at or before', () => {
+    test("forget removes all at or before", () => {
       const a = new ActiveIntervalsOrderedByEndpoint<number, string>(numberOps);
-      a.add([r(0, 5), 'x1']);
-      a.add([r(3, 5), 'x2']);
-      a.add([r(5, 5), 'x0']);
-      a.add([r(5, 6), 'y']);
+      a.add([r(0, 5), "x1"]);
+      a.add([r(3, 5), "x2"]);
+      a.add([r(5, 5), "x0"]);
+      a.add([r(5, 6), "y"]);
 
       const before = a.allLabels().slice().sort();
-      expect(before).toEqual(['x0', 'x1', 'x2', 'y']);
+      expect(before).toEqual(["x0", "x1", "x2", "y"]);
 
       a.forgetIntervalsEndingAtOrBefore(5);
       expect(a.nextEnd()).toBe(6);
       const after = a.allLabels().slice().sort();
-      expect(after).toEqual(['y']);
+      expect(after).toEqual(["y"]);
     });
 
-    test('add inverted interval panics', () => {
+    test("add inverted interval panics", () => {
       const a = new ActiveIntervalsOrderedByEndpoint<number, string>(numberOps);
-      expect(() => a.add([r(5, 3), 'bad'])).toThrowError('Interval start must be <= end');
+      expect(() => a.add([r(5, 3), "bad"])).toThrowError(
+        "Interval start must be <= end"
+      );
     });
   });
 
-  describe('K-way merge utilities', () => {
-    test('kmerge with empty input', () => {
+  describe("K-way merge utilities", () => {
+    test("kmerge with empty input", () => {
       const result = kmerge<number, string>([]);
       expect(result).toEqual([]);
     });
 
-    test('kmerge with single list', () => {
+    test("kmerge with single list", () => {
       const list = [i(0, 3), i(5, 8)];
       const result = kmerge([list]);
       expect(result).toEqual(list);
     });
 
-    test('kmerge with two lists', () => {
+    test("kmerge with two lists", () => {
       const list1 = [i(0, 3), i(5, 8), i(10, 13)];
       const list2 = [i(2, 4), i(6, 9), i(11, 14)];
       const result = kmerge([list1, list2]);
-      
+
       expect(result).toMatchInlineSnapshot(`
         [
           [
@@ -700,12 +742,12 @@ if (import.meta.vitest) {
       `);
     });
 
-    test('kmerge with three lists', () => {
+    test("kmerge with three lists", () => {
       const list1 = [i(0, 2), i(6, 8)];
       const list2 = [i(1, 3), i(7, 9)];
       const list3 = [i(4, 5), i(10, 12)];
       const result = kmerge([list1, list2, list3]);
-      
+
       expect(result).toMatchInlineSnapshot(`
         [
           [
@@ -736,23 +778,26 @@ if (import.meta.vitest) {
       `);
     });
 
-    test('kmerge maintains stability for equal start points', () => {
+    test("kmerge maintains stability for equal start points", () => {
       const list1 = [i(5, 10), i(5, 15)];
       const list2 = [i(5, 8), i(5, 12)];
       const result = kmerge([list1, list2]);
-      
+
       // When start points are equal, original list order should be preserved (list1 before list2)
       expect(result.map(([range]) => range.toString())).toEqual([
-        '5..10', '5..15', '5..8', '5..12'
+        "5..10",
+        "5..15",
+        "5..8",
+        "5..12",
       ]);
     });
 
-    test('kmerge with empty lists mixed in', () => {
+    test("kmerge with empty lists mixed in", () => {
       const list1 = [i(0, 3)];
       const list2: Interval<number, Range<number>>[] = [];
       const list3 = [i(2, 5)];
       const result = kmerge([list1, list2, list3]);
-      
+
       expect(result).toMatchInlineSnapshot(`
         [
           [
@@ -767,17 +812,17 @@ if (import.meta.vitest) {
       `);
     });
 
-    test('kmerge with different label types', () => {
+    test("kmerge with different label types", () => {
       const list1: Array<Interval<number, string>> = [
-        [r(0, 3), 'a'],
-        [r(5, 8), 'b'],
+        [r(0, 3), "a"],
+        [r(5, 8), "b"],
       ];
       const list2: Array<Interval<number, string>> = [
-        [r(2, 4), 'c'],
-        [r(6, 9), 'd'],
+        [r(2, 4), "c"],
+        [r(6, 9), "d"],
       ];
       const result = kmerge([list1, list2]);
-      
+
       expect(result).toMatchInlineSnapshot(`
         [
           [
@@ -800,36 +845,39 @@ if (import.meta.vitest) {
       `);
     });
 
-    test('kmergeBy with custom comparator', () => {
+    test("kmergeBy with custom comparator", () => {
       // Merge by end point instead of start point
-      const byEndPoint = <L>(a: Interval<number, L>, b: Interval<number, L>) => 
+      const byEndPoint = <L>(a: Interval<number, L>, b: Interval<number, L>) =>
         a[0].end < b[0].end;
-      
+
       const list1 = [i(0, 3), i(5, 10)];
       const list2 = [i(2, 7), i(8, 12)];
       const result = kmergeBy([list1, list2], byEndPoint);
-      
+
       // Should be sorted by end point: 3, 7, 10, 12
       expect(result.map(([range]) => range.toString())).toEqual([
-        '0..3', '2..7', '5..10', '8..12'
+        "0..3",
+        "2..7",
+        "5..10",
+        "8..12",
       ]);
     });
 
-    test('kmerge with tuple indices', () => {
-      const pr = (s: [number, number], e: [number, number]) => 
+    test("kmerge with tuple indices", () => {
+      const pr = (s: [number, number], e: [number, number]) =>
         new Range<[number, number]>(s, e, tuple2NumberOps.show);
-      
+
       const list1: Array<Interval<[number, number], string>> = [
-        [pr([1, 1], [1, 3]), 'A'],
-        [pr([2, 1], [2, 3]), 'B'],
+        [pr([1, 1], [1, 3]), "A"],
+        [pr([2, 1], [2, 3]), "B"],
       ];
       const list2: Array<Interval<[number, number], string>> = [
-        [pr([1, 2], [1, 4]), 'C'],
-        [pr([3, 1], [3, 3]), 'D'],
+        [pr([1, 2], [1, 4]), "C"],
+        [pr([3, 1], [3, 3]), "D"],
       ];
-      
+
       const result = kmerge([list1, list2], tuple2NumberOps);
-      
+
       expect(result).toMatchInlineSnapshot(`
         [
           [
@@ -853,27 +901,27 @@ if (import.meta.vitest) {
     });
   });
 
-  describe('Multiple annotations with k-merge', () => {
-    test('merge and split', () => {
-      const Blue = 'Blue' as const;
-      const Yellow = 'Yellow' as const;
-      const Changed = 'Changed' as const;
-      const Same = 'Same' as const;
+  describe("Multiple annotations with k-merge", () => {
+    test("merge and split", () => {
+      const Blue = "Blue" as const;
+      const Yellow = "Yellow" as const;
+      const Changed = "Changed" as const;
+      const Same = "Same" as const;
 
-      const syntaxHighlighting: Array<Interval<number, 'Blue' | 'Yellow'>> = [
+      const syntaxHighlighting: Array<Interval<number, "Blue" | "Yellow">> = [
         [r(0, 3), Blue],
         [r(5, 8), Yellow],
         [r(10, 13), Blue],
       ];
-      const diffs: Array<Interval<number, 'Changed' | 'Same'>> = [
+      const diffs: Array<Interval<number, "Changed" | "Same">> = [
         [r(0, 2), Same],
         [r(2, 10), Changed],
         [r(10, 15), Same],
       ];
 
-      const merged: Array<Interval<number, 'Blue' | 'Yellow' | 'Changed' | 'Same'>> = kmerge(
-        [syntaxHighlighting, diffs],
-      );
+      const merged: Array<
+        Interval<number, "Blue" | "Yellow" | "Changed" | "Same">
+      > = kmerge([syntaxHighlighting, diffs]);
       expect(merged).toMatchInlineSnapshot(`
         [
           [
@@ -903,7 +951,7 @@ if (import.meta.vitest) {
         ]
       `);
 
-  const out = collect(SplitIntoDisjointRanges.fromSortedIntervals(merged));
+      const out = collect(SplitIntoDisjointRanges.fromSortedIntervals(merged));
       expect(out).toMatchInlineSnapshot(`
         [
           [
@@ -957,14 +1005,17 @@ if (import.meta.vitest) {
     });
   });
 
-  describe('Tuple index support', () => {
-    test('lexicographic pair indices', () => {
-      const pr = (s: [number, number], e: [number, number]) => new Range<[number, number]>(s, e, tuple2NumberOps.show);
+  describe("Tuple index support", () => {
+    test("lexicographic pair indices", () => {
+      const pr = (s: [number, number], e: [number, number]) =>
+        new Range<[number, number]>(s, e, tuple2NumberOps.show);
       const input: Array<Interval<[number, number], string>> = [
-        [pr([1, 1], [1, 3]), 'X'],
-        [pr([1, 2], [1, 4]), 'Y'],
+        [pr([1, 1], [1, 3]), "X"],
+        [pr([1, 2], [1, 4]), "Y"],
       ];
-      const out = collect(SplitIntoDisjointRanges.fromSortedIntervals(input, tuple2NumberOps));
+      const out = collect(
+        SplitIntoDisjointRanges.fromSortedIntervals(input, tuple2NumberOps)
+      );
       expect(out).toMatchInlineSnapshot(`
         [
           [
