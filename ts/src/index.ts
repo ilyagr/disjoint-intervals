@@ -85,7 +85,7 @@ export function intoDisjointIntervals<Ix, Label>(
 
   for (const { position, kind, label } of endpoints) {
     if (active.size != 0) {
-      if (lastPosition === null || ops.compare(lastPosition as Ix, position) < 0) {
+      if (lastPosition === null || ops.compare(lastPosition as Ix, position) > 0) {
         throw new Error("Unreachable: endpoints should be sorted, and lastPosition set before anything is inserted into the active set");
       }
       result.push([new Range(lastPosition, position, ops.show), new Map(active)]);
@@ -386,6 +386,13 @@ if (import.meta.vitest) {
       expect(out).toMatchInlineSnapshot(`[]`);
     });
 
+    test("empty input (intoDisjointIntervals parity)", () => {
+      const input: Array<Interval<number, never>> = [];
+      const out1 = collect(SplitIntoDisjointRanges.fromSortedIntervals(input));
+      const out2 = intoDisjointIntervals(input).map(([r, ms]) => [r, multiset_allLabels(ms)]);
+      expect(out2).toEqual(out1);
+    });
+
     test("single non-empty interval", () => {
       const input = [i(0, 5)];
       const out = collect(SplitIntoDisjointRanges.fromSortedIntervals(input));
@@ -401,6 +408,13 @@ if (import.meta.vitest) {
       `);
     });
 
+    test("single non-empty interval (intoDisjointIntervals parity)", () => {
+      const input = [i(0, 5)];
+      const out1 = collect(SplitIntoDisjointRanges.fromSortedIntervals(input));
+      const out2 = intoDisjointIntervals(input).map(([r, ms]) => [r, multiset_allLabels(ms)]);
+      expect(out2).toEqual(out1);
+    });
+
     test("single empty interval becomes 0-length segment", () => {
       const input = [i(5, 5)];
       const out = collect(SplitIntoDisjointRanges.fromSortedIntervals(input));
@@ -414,6 +428,13 @@ if (import.meta.vitest) {
           ],
         ]
       `);
+    });
+
+    test("single empty interval becomes 0-length segment (intoDisjointIntervals parity)", () => {
+      const input = [i(5, 5)];
+      const out1 = collect(SplitIntoDisjointRanges.fromSortedIntervals(input));
+      const out2 = intoDisjointIntervals(input).map(([r, ms]) => [r, multiset_allLabels(ms)]);
+      expect(out2).toEqual(out1);
     });
   });
 
@@ -457,6 +478,15 @@ if (import.meta.vitest) {
       `);
     });
 
+    test("many same start including empties (intoDisjointIntervals parity)", () => {
+      const input = [i(5, 5), i(5, 7), i(5, 10), i(5, 6)];
+      const out1 = collect(SplitIntoDisjointRanges.fromSortedIntervals(input));
+      const out2 = intoDisjointIntervals(input).map(([r, ms]) => [r, multiset_allLabels(ms)]);
+      // Labels order is not guaranteed between implementations; compare after sorting labels
+      const norm = (xs: any[]) => xs.map(([r, ls]: any) => [r.toString(), ls.map((x: any) => String(x)).sort()]);
+      expect(norm(out2)).toEqual(norm(out1));
+    });
+
     test("identical end points drop all at boundary", () => {
       const input = [i(0, 5), i(3, 5), i(4, 5), i(5, 8)];
       const out = collect(SplitIntoDisjointRanges.fromSortedIntervals(input));
@@ -493,11 +523,25 @@ if (import.meta.vitest) {
       `);
     });
 
+    test("identical end points drop all at boundary (intoDisjointIntervals parity)", () => {
+      const input = [i(0, 5), i(3, 5), i(4, 5), i(5, 8)];
+      const out1 = collect(SplitIntoDisjointRanges.fromSortedIntervals(input));
+      const out2 = intoDisjointIntervals(input).map(([r, ms]) => [r, multiset_allLabels(ms)]);
+      const norm = (xs: any[]) => xs.map(([r, ls]: any) => [r.toString(), ls.map((x: any) => String(x)).sort()]);
+      expect(norm(out2)).toEqual(norm(out1));
+    });
+
     test("unsorted input panics", () => {
       const input = [i(2, 3), i(0, 1)];
       expect(() =>
         collect(SplitIntoDisjointRanges.fromSortedIntervals(input))
       ).toThrowError("Input intervals were not properly sorted");
+    });
+
+    test("unsorted input with intoDisjointIntervals does not panic (parity check)", () => {
+      const input = [i(2, 3), i(0, 1)];
+      // intoDisjointIntervals internally sorts endpoints, so it should not throw
+      expect(() => intoDisjointIntervals(input)).not.toThrow();
     });
 
     test("inverted interval panics", () => {
@@ -506,6 +550,12 @@ if (import.meta.vitest) {
       expect(() =>
         collect(SplitIntoDisjointRanges.fromSortedIntervals(input))
       ).toThrowError("Interval start must be <= end");
+    });
+
+    test("inverted interval with intoDisjointIntervals does not panic (parity check)", () => {
+      const bad: Interval<number, Range<number>> = [r(5, 3), r(5, 3)];
+      const input = [bad];
+      expect(() => intoDisjointIntervals(input)).not.toThrow();
     });
   });
 
@@ -588,6 +638,22 @@ if (import.meta.vitest) {
           ],
         ]
       `);
+    });
+
+    test("handling of empty intervals at start points (intoDisjointIntervals parity)", () => {
+      const input = [
+        i(0, 5),
+        i(4, 6),
+        i(5, 5),
+        i(5, 7),
+        i(7, 7),
+        i(10, 10),
+        i(10, 11),
+      ];
+      const lhs = collect(SplitIntoDisjointRanges.fromSortedIntervals(input));
+      const rhs = intoDisjointIntervals(input).map(([r, ms]) => [r, multiset_allLabels(ms)]);
+      const norm = (xs: any[]) => xs.map(([range, labels]: any) => [range.toString(), labels.map((x: any) => String(x)).sort()]);
+      expect(norm(rhs)).toEqual(norm(lhs));
     });
 
     test("larger composite example", () => {
@@ -717,6 +783,25 @@ if (import.meta.vitest) {
         ]
       `);
     });
+
+    test("larger composite example (intoDisjointIntervals parity)", () => {
+      const input = [
+        i(0, 5),
+        i(2, 2),
+        i(3, 8),
+        i(8, 9),
+        i(8, 8),
+        i(10, 15),
+        i(12, 20),
+        i(20, 25),
+        i(22, 30),
+        i(23, 35),
+      ];
+      const lhs = collect(SplitIntoDisjointRanges.fromSortedIntervals(input));
+      const rhs = intoDisjointIntervals(input).map(([r, ms]) => [r, multiset_allLabels(ms)]);
+      const norm = (xs: any[]) => xs.map(([range, labels]: any) => [range.toString(), labels.map((x: any) => String(x)).sort()]);
+      expect(norm(rhs)).toEqual(norm(lhs));
+    });
   });
 
   describe("ActiveIntervalsOrderedByEndpoint behavior", () => {
@@ -786,10 +871,29 @@ if (import.meta.vitest) {
       expect(result).toEqual([]);
     });
 
+    test("kmerge with empty input (intoDisjointIntervals parity)", () => {
+      const merged = kmerge<number, string>([]);
+      const lhs = collect(
+        SplitIntoDisjointRanges.fromSortedIntervals(merged)
+      );
+      const rhs = intoDisjointIntervals(merged).map(([r, ms]) => [r, multiset_allLabels(ms)]);
+      expect(rhs).toEqual(lhs);
+    });
+
     test("kmerge with single list", () => {
       const list = [i(0, 3), i(5, 8)];
       const result = kmerge([list]);
       expect(result).toEqual(list);
+    });
+
+    test("kmerge with single list (intoDisjointIntervals parity)", () => {
+      const list = [i(0, 3), i(5, 8)];
+      const merged = kmerge([list]);
+      const lhs = collect(
+        SplitIntoDisjointRanges.fromSortedIntervals(merged)
+      );
+      const rhs = intoDisjointIntervals(merged).map(([r, ms]) => [r, multiset_allLabels(ms)]);
+      expect(rhs).toEqual(lhs);
     });
 
     test("kmerge with two lists", () => {
@@ -825,6 +929,18 @@ if (import.meta.vitest) {
           ],
         ]
       `);
+    });
+
+    test("kmerge with two lists (intoDisjointIntervals parity)", () => {
+      const list1 = [i(0, 3), i(5, 8), i(10, 13)];
+      const list2 = [i(2, 4), i(6, 9), i(11, 14)];
+      const merged = kmerge([list1, list2]);
+      const lhs = collect(
+        SplitIntoDisjointRanges.fromSortedIntervals(merged)
+      );
+      const rhs = intoDisjointIntervals(merged).map(([r, ms]) => [r, multiset_allLabels(ms)]);
+      const norm = (xs: any[]) => xs.map(([r, ls]: any) => [r.toString(), ls.map((x: any) => String(x)).sort()]);
+      expect(norm(rhs)).toEqual(norm(lhs));
     });
 
     test("kmerge with three lists", () => {
@@ -863,6 +979,19 @@ if (import.meta.vitest) {
       `);
     });
 
+    test("kmerge with three lists (intoDisjointIntervals parity)", () => {
+      const list1 = [i(0, 2), i(6, 8)];
+      const list2 = [i(1, 3), i(7, 9)];
+      const list3 = [i(4, 5), i(10, 12)];
+      const merged = kmerge([list1, list2, list3]);
+      const lhs = collect(
+        SplitIntoDisjointRanges.fromSortedIntervals(merged)
+      );
+      const rhs = intoDisjointIntervals(merged).map(([r, ms]) => [r, multiset_allLabels(ms)]);
+      const norm = (xs: any[]) => xs.map(([r, ls]: any) => [r.toString(), ls.map((x: any) => String(x)).sort()]);
+      expect(norm(rhs)).toEqual(norm(lhs));
+    });
+
     test("kmerge maintains stability for equal start points", () => {
       const list1 = [i(5, 10), i(5, 15)];
       const list2 = [i(5, 8), i(5, 12)];
@@ -875,6 +1004,18 @@ if (import.meta.vitest) {
         "5..8",
         "5..12",
       ]);
+    });
+
+    test("kmerge maintains stability for equal start points (intoDisjointIntervals parity)", () => {
+      const list1 = [i(5, 10), i(5, 15)];
+      const list2 = [i(5, 8), i(5, 12)];
+      const merged = kmerge([list1, list2]);
+      const lhs = collect(
+        SplitIntoDisjointRanges.fromSortedIntervals(merged)
+      );
+      const rhs = intoDisjointIntervals(merged).map(([r, ms]) => [r, multiset_allLabels(ms)]);
+      const norm = (xs: any[]) => xs.map(([r, ls]: any) => [r.toString(), ls.map((x: any) => String(x)).sort()]);
+      expect(norm(rhs)).toEqual(norm(lhs));
     });
 
     test("kmerge with empty lists mixed in", () => {
@@ -895,6 +1036,19 @@ if (import.meta.vitest) {
           ],
         ]
       `);
+    });
+
+    test("kmerge with empty lists mixed in (intoDisjointIntervals parity)", () => {
+      const list1 = [i(0, 3)];
+      const list2: Interval<number, Range<number>>[] = [];
+      const list3 = [i(2, 5)];
+      const merged = kmerge([list1, list2, list3]);
+      const lhs = collect(
+        SplitIntoDisjointRanges.fromSortedIntervals(merged)
+      );
+      const rhs = intoDisjointIntervals(merged).map(([r, ms]) => [r, multiset_allLabels(ms)]);
+      const norm = (xs: any[]) => xs.map(([r, ls]: any) => [r.toString(), ls.map((x: any) => String(x)).sort()]);
+      expect(norm(rhs)).toEqual(norm(lhs));
     });
 
     test("kmerge with different label types", () => {
@@ -930,6 +1084,24 @@ if (import.meta.vitest) {
       `);
     });
 
+    test("kmerge with different label types (intoDisjointIntervals parity)", () => {
+      const list1: Array<Interval<number, string>> = [
+        [r(0, 3), "a"],
+        [r(5, 8), "b"],
+      ];
+      const list2: Array<Interval<number, string>> = [
+        [r(2, 4), "c"],
+        [r(6, 9), "d"],
+      ];
+      const merged = kmerge([list1, list2]);
+      const lhs = collect(
+        SplitIntoDisjointRanges.fromSortedIntervals(merged)
+      );
+      const rhs = intoDisjointIntervals(merged).map(([r, ms]) => [r, multiset_allLabels(ms)]);
+      const norm = (xs: any[]) => xs.map(([r, ls]: any) => [r.toString(), ls.slice().map((x: any) => String(x)).sort()]);
+      expect(norm(rhs)).toEqual(norm(lhs));
+    });
+
     test("kmergeBy with custom comparator", () => {
       // Merge by end point instead of start point
       const byEndPoint = <L>(a: Interval<number, L>, b: Interval<number, L>) =>
@@ -946,6 +1118,20 @@ if (import.meta.vitest) {
         "5..10",
         "8..12",
       ]);
+    });
+
+    test("kmergeBy + intoDisjointIntervals parity (by end point)", () => {
+      const byEndPoint = <L>(a: Interval<number, L>, b: Interval<number, L>) =>
+        a[0].end < b[0].end;
+      const list1 = [i(0, 3), i(5, 10)];
+      const list2 = [i(2, 7), i(8, 12)];
+      const merged = kmergeBy([list1, list2], byEndPoint);
+      const lhs = collect(
+        SplitIntoDisjointRanges.fromSortedIntervals(merged)
+      );
+      const rhs = intoDisjointIntervals(merged).map(([r, ms]) => [r, multiset_allLabels(ms)]);
+      const norm = (xs: any[]) => xs.map(([r, ls]: any) => [r.toString(), ls.map((x: any) => String(x)).sort()]);
+      expect(norm(rhs)).toEqual(norm(lhs));
     });
 
     test("kmerge with tuple indices", () => {
@@ -983,6 +1169,26 @@ if (import.meta.vitest) {
           ],
         ]
       `);
+    });
+
+    test("kmerge with tuple indices (intoDisjointIntervals parity)", () => {
+      const pr = (s: [number, number], e: [number, number]) =>
+        new Range<[number, number]>(s, e, tuple2NumberOps.show);
+      const list1: Array<Interval<[number, number], string>> = [
+        [pr([1, 1], [1, 3]), "A"],
+        [pr([2, 1], [2, 3]), "B"],
+      ];
+      const list2: Array<Interval<[number, number], string>> = [
+        [pr([1, 2], [1, 4]), "C"],
+        [pr([3, 1], [3, 3]), "D"],
+      ];
+      const merged = kmerge([list1, list2], tuple2NumberOps);
+      const lhs = collect(
+        SplitIntoDisjointRanges.fromSortedIntervals(merged, tuple2NumberOps)
+      );
+      const rhs = intoDisjointIntervals(merged, tuple2NumberOps).map(([r, ms]) => [r, multiset_allLabels(ms)]);
+      const norm = (xs: any[]) => xs.map(([r, ls]: any) => [r.toString(), ls.slice().map((x: any) => String(x)).sort()]);
+      expect(norm(rhs)).toEqual(norm(lhs));
     });
   });
 
@@ -1088,6 +1294,36 @@ if (import.meta.vitest) {
         ]
       `);
     });
+
+    test("merge and split (intoDisjointIntervals parity)", () => {
+      const Blue = "Blue" as const;
+      const Yellow = "Yellow" as const;
+      const Changed = "Changed" as const;
+      const Same = "Same" as const;
+
+      const r = (start: number, end: number) =>
+        new Range<number>(start, end, numberOps.show);
+
+      const syntaxHighlighting: Array<Interval<number, typeof Blue | typeof Yellow>> = [
+        [r(0, 3), Blue],
+        [r(5, 8), Yellow],
+        [r(10, 13), Blue],
+      ];
+      const diffs: Array<Interval<number, typeof Changed | typeof Same>> = [
+        [r(0, 2), Same],
+        [r(2, 10), Changed],
+        [r(10, 15), Same],
+      ];
+
+      const merged: Array<
+        Interval<number, typeof Blue | typeof Yellow | typeof Changed | typeof Same>
+      > = kmerge([syntaxHighlighting, diffs]);
+
+      const lhs = collect(SplitIntoDisjointRanges.fromSortedIntervals(merged));
+      const rhs = intoDisjointIntervals(merged).map(([range, ms]) => [range, multiset_allLabels(ms)]);
+      const norm = (xs: any[]) => xs.map(([range, labels]: any) => [range.toString(), labels.slice().map((x: any) => String(x)).sort()]);
+      expect(norm(rhs)).toEqual(norm(lhs));
+    });
   });
 
   describe("Tuple index support", () => {
@@ -1124,6 +1360,21 @@ if (import.meta.vitest) {
           ],
         ]
       `);
+    });
+
+    test("lexicographic pair indices (intoDisjointIntervals parity)", () => {
+      const pr = (s: [number, number], e: [number, number]) =>
+        new Range<[number, number]>(s, e, tuple2NumberOps.show);
+      const input: Array<Interval<[number, number], string>> = [
+        [pr([1, 1], [1, 3]), "X"],
+        [pr([1, 2], [1, 4]), "Y"],
+      ];
+      const lhs = collect(
+        SplitIntoDisjointRanges.fromSortedIntervals(input, tuple2NumberOps)
+      );
+      const rhs = intoDisjointIntervals(input, tuple2NumberOps).map(([r, ms]) => [r, multiset_allLabels(ms)]);
+      const norm = (xs: any[]) => xs.map(([r, ls]: any) => [r.toString(), ls.slice().map((x: any) => String(x)).sort()]);
+      expect(norm(rhs)).toEqual(norm(lhs));
     });
   });
 }

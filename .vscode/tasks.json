@@ -1,0 +1,11 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "test (vitest in ts)",
+			"type": "shell",
+			"command": "cd /Users/ilyagr/dev/disjoint-intervals-lib/ts && npm test --silent",
+			"group": "test"
+		}
+	]
+}
