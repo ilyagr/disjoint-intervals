@@ -79,7 +79,7 @@ export function intoDisjointIntervals<Ix, Label>(
 ): Array<Interval<Ix, Multiset<Label>>> {
   const ends = endpoints(intervals, ops);
 
-  ends.sort((a, b) => endpointOrder(a, b, ops));
+  ends.sort(endpointOrder<Ix, Label>(ops));
 
   const result = new Array<Interval<Ix, Multiset<Label>>>();
   const active: Multiset<Label> = new Map<Label, number>();
@@ -109,12 +109,14 @@ type Endpoint<Ix, Label> = {
   label: Label;
 };
 
-function endpointOrder<Ix, Label>(a: Endpoint<Ix, Label>, b: Endpoint<Ix, Label>, ops: IxOps<Ix>): number {
+function endpointOrder<Ix, Label>(ops: IxOps<Ix>): (a: Endpoint<Ix, Label>, b: Endpoint<Ix, Label>) => number {
+  return (a, b) => {
     const cmp = ops.compare(a.position, b.position);
     if (cmp !== 0) return cmp;
     // For equal positions, 'end' comes before 'start' to handle empty intervals correctly
     if (a.kind === b.kind) return 0;
     return a.kind === "end" ? -1 : 1;
+  };
 }
   
 function endpoints<Ix, Label>(
